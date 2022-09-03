@@ -91,9 +91,256 @@ HRESULT Win32XAudioInit(win32_audio_buffer* AudioBuffer)
 
     AudioBuffer->SourceVoice->SetVolume(0.1f);
 
-    return(S_OK);
+    return S_OK;
 }
 
+const char* Sounds::GetKeyName(Key key, Scale scale)
+{
+        switch (key)
+        {
+        case Key_As: return "A#"; break;
+        case Key_Bb: return "Bb"; break;
+        case Key_B: return "B"; break;
+        case Key_Bs: return "B#"; break;
+        case Key_Cb: return "Cb";break;
+        case Key_C: return "C";break;
+        case Key_Cs: return "C#";break;
+        case Key_Db: return "Db";break;
+        case Key_D: return "D";break;
+        case Key_Ds: return "D#";break;
+        case Key_Eb: return "Eb";break;
+        case Key_E: return "E";break;
+        case Key_Es: return "E#";break;
+        case Key_Fb: return "Fb";break;
+        case Key_F: return "F";break;
+        case Key_Fs: return "F#";break;
+        case Key_Gb: return "Gb";break;
+        case Key_G: return "G";break;
+        case Key_Gs: return "G#";break;
+        case Key_Ab: return "Ab";break;
+        case Key_A: return "A";break;
+        default: return "";break;
+        }
+    //if(!isFlat)
+    //    switch (idx)
+    //    {
+    //    case A: return "A"; break;
+    //    case As: return "A#"; break;
+    //    case B: return "B"; break;
+    //    case C: return "C"; break;
+    //    case Cs: return "C#"; break;
+    //    case D: return "D"; break;
+    //    case Ds: return "D#"; break;
+    //    case E: return "E"; break;
+    //    case F: return "F"; break;
+    //    case Fs: return "F#"; break;
+    //    case G: return "G"; break;
+    //    case Gs: return "G#"; break;
+    //    default: break;
+    //    }
+    //else
+    //    switch (idx)
+    //    {
+    //    case A: return "A"; break;
+    //    case D: return "D"; break;
+    //    case G: return "G"; break;
+    //    case C: return "C"; break;
+    //    case Bb: return "Bb"; break;
+    //    //case Bs: return "B#"; break;
+    //    case Cb: return "Cb"; break;
+    //    case Db: return "Db"; break;
+    //    case Eb: return "Eb"; break;
+    //    case Fb: return "Fb"; break;
+    //    case Es: return "E#"; break;
+    //    case Gb: return "Gb"; break;
+    //    case Ab: return "Ab"; break;
+    //    default:break;
+    //    }
+}
+
+Note Sounds::Key2Note(Key key)
+{
+    switch (key)
+    {   
+    case Key_A: return (Note)A; break;
+    case Key_As: return (Note)As; break;
+    case Key_Bb: return (Note)Bb; break;
+    case Key_B: return (Note)B; break;
+    case Key_Bs: return (Note)Bs; break;
+    case Key_Cb: return (Note)Cb; break;
+    case Key_C: return (Note)C; break;
+    case Key_Cs: return (Note)Cs; break;
+    case Key_Db: return (Note)Db; break;
+    case Key_D: return (Note)D; break;
+    case Key_Ds: return (Note)Ds; break;
+    case Key_Eb: return (Note)Eb; break;
+    case Key_E: return (Note)E; break;
+    case Key_Es: return (Note)Es; break;
+    case Key_Fb: return (Note)Fb; break;
+    case Key_F: return (Note)F; break;
+    case Key_Fs: return (Note)Fs; break;
+    case Key_Gb: return (Note)Gb; break;
+    case Key_G: return (Note)G; break;
+    case Key_Gs: return (Note)Gs; break;
+    case Key_Ab: return (Note)Ab; break;
+    default: break;
+    }
+}
+
+Key Sounds::Note2Key(Note note)
+{
+    switch (note)
+    {
+    case A: return Key_A; break;
+    case As: return Key_As; break;
+    case B: return Key_B; break;
+    case C: return Key_C; break;
+    case Cs: return Key_Cs; break;
+    case D: return Key_D; break;
+    case Ds: return Key_Ds; break;
+    case E: return Key_E; break;
+    case F: return Key_F; break;
+    case Fs: return Key_Fs; break;
+    case G: return Key_G; break;
+    case Gs: return Key_Gs; break;
+    default: break;
+    }
+}
+
+void Sounds::GetKeySignature(Scale scale, Key baseKey, Key outSignature1[7])
+{
+    Key outSignature[7];
+    auto baseNote = Key2Note(baseKey);
+    Note noteSignature[7]{};
+
+    switch (scale)
+    {
+    case Major:
+        noteSignature[0] = baseNote;
+        noteSignature[1] = (Note)((baseNote + 2) % 12);
+        noteSignature[2] = (Note)((baseNote + 4) % 12);
+        noteSignature[3] = (Note)((baseNote + 5) % 12);
+        noteSignature[4] = (Note)((baseNote + 7) % 12);
+        noteSignature[5] = (Note)((baseNote + 9) % 12);
+        noteSignature[6] = (Note)((baseNote + 11) % 12);
+        break;
+    case Minor:
+        noteSignature[0] = baseNote;
+        noteSignature[1] = (Note)((baseNote + 2) % 12);
+        noteSignature[2] = (Note)((baseNote + 3) % 12);
+        noteSignature[3] = (Note)((baseNote + 5) % 12);
+        noteSignature[4] = (Note)((baseNote + 7) % 12);
+        noteSignature[5] = (Note)((baseNote + 8) % 12);
+        noteSignature[6] = (Note)((baseNote + 10) % 12);
+        break;
+    default:
+        break;
+    }
+
+    //for (int i = 0; i < 7; i++)
+    //    printf("Note %i: %s ", i, GetKeyName(Note2Key(noteSignature[i]), scale));
+    //std::cout << std::endl;
+
+    for (int i = 0; i < 7; i++)
+        outSignature[i] = Note2Key(noteSignature[i]);
+
+    outSignature[0] = baseKey;
+
+    bool isBaseKeySharp = (baseKey) % 3 == 1;
+    bool isBaseKeyNeutral = ((baseKey) % 3 == 0);
+
+    int retries = 0;
+
+TryNewSignature:
+
+    for (int i = 1; i < 7; i++)
+    {
+        //if ((outSignature[i] + 1) % 3 == 0)
+        //    continue;
+
+        bool isSharp = (outSignature[i]) % 3 == 1;
+        bool isNeutral = ((outSignature[i]) % 3 == 0);
+
+        // Make sure the note has the same accidental as the base note
+        if (isSharp != isBaseKeySharp && !isNeutral && !isBaseKeyNeutral)
+        {
+            if (isSharp)
+                outSignature[i] = (Key)abs((outSignature[i] + 1) % 21);
+            else
+                outSignature[i] = (Key)abs((outSignature[i] - 1) % 21);
+        }
+
+        // Check if there are duplicate notes (ex. A and Ab, or Ab and A#)
+        bool isHigher = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] + 1) + 21) % 21)) != outSignature + 7);
+        bool isHigher2 = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] + 2) + 21) % 21)) != outSignature + 7) && !isNeutral;
+        bool isLower = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] - 1) + 21) % 21)) != outSignature + 7);
+        bool isLower2 = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] - 2) + 21) % 21)) != outSignature + 7) && !isNeutral;
+
+        if (isNeutral)
+        {
+            if (!(outSignature[i] == Key_F || outSignature[i] == Key_E || outSignature[i] == Key_C || outSignature[i] == Key_B))
+                continue;
+            // Move for example the note F to be E# if F# or Fb is taken. Same goes for E, C and B just with their respective neighbouring notes
+            if (isHigher && isBaseKeySharp)
+                outSignature[i] = (Key)abs((outSignature[i] - 2) % 21);
+            if (isLower && !isBaseKeySharp)
+                outSignature[i] = (Key)abs((outSignature[i] + 2) % 21);
+        }
+        else
+        {
+            // Try to avoid duplicates by moving for example a note G# to be Ab if there are no A, A#, or Ab notes.
+            if ((isHigher || isHigher2) && !isSharp && !isNeutral)
+                outSignature[i] = (Key)abs((outSignature[i] - (isHigher2 ? 2 : 1)) % 21);
+
+            if ((isLower || isLower2) && isSharp && isNeutral)
+                outSignature[i] = (Key)abs((outSignature[i] + (isLower2 ? 2 : 1)) % 21);
+        }
+    }
+
+    // Check if is correct
+    if (retries <= 2)
+    {
+        bool isCorrect = true;
+
+        std::copy(outSignature, outSignature + 7, outSignature1);
+
+        for (int i = 1; i < 7; i++)
+        {
+            bool isNeutral = ((outSignature[i]) % 3 == 0);
+
+            bool isHigher = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] + 1) + 21) % 21)) != outSignature + 7);
+            bool isHigher2 = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] + 2) + 21) % 21)) != outSignature + 7) && !isNeutral;
+            bool isLower = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] - 1) + 21) % 21)) != outSignature + 7);
+            bool isLower2 = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] - 2) + 21) % 21)) != outSignature + 7) && !isNeutral;
+
+            // If is wrong
+            if (isHigher || isHigher2 || isLower || isLower2)
+            {
+                if (retries < 2)
+                    isBaseKeySharp = !isBaseKeySharp;
+                if (isBaseKeyNeutral)
+                {
+                    isBaseKeySharp = false;
+                    isBaseKeyNeutral = false;
+                }
+                retries++;
+                // Try again with assuming a different accidental on a base note
+                goto TryNewSignature;
+            }
+            else // If already retried just return with the first signature
+                return;
+        }
+    }
+
+    //for (int i = 0; i < 7; i++)
+    //{
+    //    printf("Key %i: %s ", i, GetKeyName(outSignature[i], scale));
+    //    outSignature1[i] = outSignature[i];
+    //}
+    //std::cout << std::endl;
+
+    std::copy(outSignature, outSignature + 7, outSignature1);
+}
 
 double SawWave(double t, float frequency) {
     double fullPeriodTime = 1.0 / frequency;

@@ -1,30 +1,5 @@
 #pragma once
 
-//enum Note
-//{
-//	C,
-//	Cs,
-//	Db = Cs,
-//	D,
-//	Ds,
-//	Eb = Ds,
-//	E,
-//	Es,
-//	Fb = E,
-//	F = Es,
-//	Fs,
-//	Gb = Fs,
-//	G,
-//	Gs,
-//	Ab = Gs,
-//	A,
-//	As,
-//	Bb = As,
-//	B,
-//	Bs = C,
-//	Cb = B,
-//};
-
 enum Note
 {
 	A,
@@ -50,30 +25,37 @@ enum Note
 	Ab = Gs,
 };
 
-//enum Note
-//{
-//	A,
-//	As,
-//	Bb = As,
-//	B,
-//	C,
-//	Bs = C,
-//	Cb = B,
-//	Cs,
-//	Db = Cs,
-//	D,
-//	Ds,
-//	Eb = Ds,
-//	E,
-//	Es,
-//	Fb = E,
-//	F = Es,
-//	Fs,
-//	Gb = Fs,
-//	G,
-//	Gs,
-//	Ab = Gs,
-//};
+enum Key
+{
+	Key_A,
+	Key_As,
+	Key_Bb,
+	Key_B,
+	Key_Bs,
+	Key_Cb,
+	Key_C,
+	Key_Cs,
+	Key_Db,
+	Key_D,
+	Key_Ds,
+	Key_Eb,
+	Key_E,
+	Key_Es,
+	Key_Fb,
+	Key_F,
+	Key_Fs,
+	Key_Gb,
+	Key_G,
+	Key_Gs,
+	Key_Ab,
+};
+
+
+enum Scale
+{
+	Major,
+	Minor,
+};
 
 enum FunctionType
 {
@@ -86,4 +68,7 @@ struct Settings
 	int octave = 6;
 	float volume = 0.1f;
 	bool useSawWave = false;
+
+	Key selectedKey = Key_C;
+	Scale selectedScale = Major;
 };

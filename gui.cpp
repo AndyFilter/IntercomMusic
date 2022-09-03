@@ -82,7 +82,6 @@ HWND GUI::Setup(int (*OnGuiFunc)())
 	colors[ImGuiCol_FrameBg] = ImVec4(0.99f, 0.99f, 0.99f, 1.00f);
 	colors[ImGuiCol_Text] = ImVec4(0.32f, 0.32f, 0.32f, 1.00f);
 	colors[ImGuiCol_WindowBg] = ImVec4(0.97f, 0.97f, 0.97f, 1.00f);
-	colors[ImGuiCol_FrameBg] = ImVec4(0.99f, 0.99f, 0.99f, 1.00f);
 
 
 	// Handle switching to fullscreen on my own

@@ -1,9 +1,12 @@
 #define WIN32_LEAN_AND_MEAN
 
+#include <algorithm>
+
 #include "External/ImGui/imgui.h"
+#include "External/ImGui/imgui_internal.h"
 #include "gui.h"
 #include "sounds.h"
-#include "External/ImGui/imgui_internal.h"
+#include "structs.h"
 
 HWND hwnd;
 
@@ -15,16 +18,38 @@ bool _wasNumLockRevertedLastFrame = false;
 
 Settings currentSettings;
 
+const char* notesList[21]{};
+const char* keysList[2] {"Major", "Minor"};
+//const char* keypadKeys[12]{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "Key", "0", "C" };
+const char* keypadKeys[12]{ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "Key" };
+const ImGuiKey intecom2VKeypad[12]{ ImGuiKey_Keypad2,ImGuiKey_NumLock, ImGuiKey_KeypadDivide, ImGuiKey_KeypadMultiply, ImGuiKey_Keypad7, ImGuiKey_Keypad8, ImGuiKey_Keypad9,ImGuiKey_Keypad4,ImGuiKey_Keypad5,ImGuiKey_Keypad6,ImGuiKey_Keypad3,ImGuiKey_Keypad1 };
+//const int idx2Keypad[12]{ 0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11 };
+const int idx2Keypad[12]{ 1, 4, 7, 11, 2, 5, 8, 0, 3, 6, 9, 10 };
+
+Key currentKeySignature[7];
+Note currentNoteSignature[7];
+
 /* 
 -------- TODO --------
 
-- Selectable keys
++ Selectable keys
 - Saving / loading and recording
 - Exporting / importing midi
 - Add icon
 
 ----------------------
  */
+
+void RecalculateKeySignature(Scale scale, Key baseKey)
+{
+	printf("Calculating Key Sig for key: %s, and scale %i\n", Sounds::GetKeyName(baseKey), scale);
+	Sounds::GetKeySignature(scale, baseKey, currentKeySignature);
+
+	//std::sort(currentKeySignature, currentKeySignature + 7);
+
+	for (int i = 0; i < 7; i++)
+		currentNoteSignature[i] = Sounds::Key2Note(currentKeySignature[i]);
+}
 
 void SetNumLock(BOOL bState)
 {
@@ -71,71 +96,115 @@ int OnGui()
 			ImGui::TableSetColumnIndex(0);
 
 			ImGui::PushStyleColor(ImGuiCol_Text, { 0,0,0,0.95f });
-			if(ImGui::Button("   1\n(A#)###KeyPad1", { keypadAvail.x/3,keypadAvail.y/4 }) || (ImGui::IsKeyPressed(ImGuiKey_NumLock, false) && !_wasNumLockRevertedLastFrame))
+
+			for (int i = 0; i <= 11; i++)
 			{
-				Sounds::PlaySound(As);
-				//memcpy(soundGraph, Sounds::bufferMem + Sounds::sampleRate - 256, 256*sizeof(float));
-				//Sleep(220);
-				//Sounds::PlaySound(Gs);
-				//memcpy(soundGraph + 256, Sounds::bufferMem, 256 * sizeof(float));
+				int keypadIdx = idx2Keypad[i];
+
+				auto currentKey = Key_C;
+
+				bool isEnabled = (std::find(currentNoteSignature, currentNoteSignature + 7, keypadIdx) != currentNoteSignature + 7);
+
+				if(isEnabled)
+					for (int x = 0; x < 7; x++)
+					{
+						Note note = Sounds::Key2Note(currentKeySignature[x]);
+						if (note == (Note)keypadIdx)
+						{
+							currentKey = currentKeySignature[x];
+							break;
+						}
+					}
+
+				char buffer[64];
+				sprintf_s(buffer, "%s\n(%s)###KeyPad%i", keypadKeys[keypadIdx], Sounds::GetKeyName(isEnabled ? currentKey : Sounds::Note2Key((Note)keypadIdx)), keypadIdx);
+
+				//ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_disabled])
+				if(!isEnabled)
+					ImGui::PushStyleVar(ImGuiStyleVar_Alpha, style.Alpha * style.DisabledAlpha);
+				if (ImGui::Button(buffer, { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(intecom2VKeypad[keypadIdx], false))
+				{
+					if (i == 0)
+					{
+						if (!_wasNumLockRevertedLastFrame)
+							Sounds::PlaySound((Note)keypadIdx);
+					}
+					else
+						Sounds::PlaySound((Note)keypadIdx);
+				}
+				if (!isEnabled)
+					ImGui::PopStyleVar();
+
+				if ((i+1) % 4 == 0 && i < 10)
+					//ImGui::Text("Space");
+					ImGui::TableSetColumnIndex((i)/4+1);
 			}
 
-			if (ImGui::Button("   4\n(C#)###KeyPad4", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad7, false))
-			{
-				Sounds::PlaySound(Cs);
-			}
-
-			if (ImGui::Button("  7\n(E)###KeyPad7", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad4, false))
-			{
-				Sounds::PlaySound(E);
-			}
-
-			if (ImGui::Button("Key\n (G)###KeyPad10", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad1, false))
-			{
-				Sounds::PlaySound(G);
-			}
-			ImGui::TableSetColumnIndex(1);
-
-			if (ImGui::Button("  2\n(B)###KeyPad2", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_KeypadDivide, false))
-			{
-				Sounds::PlaySound(B);
-			}
-
-			if (ImGui::Button("  5\n(D)###KeyPad5", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad8, false))
-			{
-				Sounds::PlaySound(D);
-			}
-
-			if (ImGui::Button("  8\n(F)###KeyPad8", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad5, false))
-			{
-				Sounds::PlaySound(F);
-			}
-
-			if (ImGui::Button("  0\n(A)###KeyPad11", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad2, false))
-			{
-				Sounds::PlaySound(A);
-			}
-			ImGui::TableSetColumnIndex(2);
-
-			if (ImGui::Button("  3\n(C)###KeyPad3", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_KeypadMultiply, false))
-			{
-				Sounds::PlaySound(C);
-			}
-
-			if (ImGui::Button("   6\n(D#)###KeyPad6", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad9, false))
-			{
-				Sounds::PlaySound(Ds);
-			}
-
-			if (ImGui::Button("   9\n(F#)###KeyPad9", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad6, false))
-			{
-				Sounds::PlaySound(Fs);
-			}
-
-			if (ImGui::Button("   C\n(G#)###KeyPad12", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad3, false))
-			{
-				Sounds::PlaySound(Gs);
-			}
+			//if(ImGui::Button("   1\n(A#)###KeyPad1", { keypadAvail.x/3,keypadAvail.y/4 }) || (ImGui::IsKeyPressed(ImGuiKey_NumLock, false) && !_wasNumLockRevertedLastFrame))
+			//{
+			//	Sounds::PlaySound(As);
+			//	//memcpy(soundGraph, Sounds::bufferMem + Sounds::sampleRate - 256, 256*sizeof(float));
+			//	//Sleep(220);
+			//	//Sounds::PlaySound(Gs);
+			//	//memcpy(soundGraph + 256, Sounds::bufferMem, 256 * sizeof(float));
+			//}
+			//
+			//if (ImGui::Button("   4\n(C#)###KeyPad4", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad7, false))
+			//{
+			//	Sounds::PlaySound(Cs);
+			//}
+			//
+			//if (ImGui::Button("  7\n(E)###KeyPad7", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad4, false))
+			//{
+			//	Sounds::PlaySound(E);
+			//}
+			//
+			//if (ImGui::Button("Key\n (G)###KeyPad10", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad1, false))
+			//{
+			//	Sounds::PlaySound(G);
+			//}
+			//ImGui::TableSetColumnIndex(1);
+			//
+			//if (ImGui::Button("  2\n(B)###KeyPad2", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_KeypadDivide, false))
+			//{
+			//	Sounds::PlaySound(B);
+			//}
+			//
+			//if (ImGui::Button("  5\n(D)###KeyPad5", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad8, false))
+			//{
+			//	Sounds::PlaySound(D);
+			//}
+			//
+			//if (ImGui::Button("  8\n(F)###KeyPad8", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad5, false))
+			//{
+			//	Sounds::PlaySound(F);
+			//}
+			//
+			//if (ImGui::Button("  0\n(A)###KeyPad11", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad2, false))
+			//{
+			//	Sounds::PlaySound(A);
+			//}
+			//ImGui::TableSetColumnIndex(2);
+			//
+			//if (ImGui::Button("  3\n(C)###KeyPad3", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_KeypadMultiply, false))
+			//{
+			//	Sounds::PlaySound(C);
+			//}
+			//
+			//if (ImGui::Button("   6\n(D#)###KeyPad6", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad9, false))
+			//{
+			//	Sounds::PlaySound(Ds);
+			//}
+			//
+			//if (ImGui::Button("   9\n(F#)###KeyPad9", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad6, false))
+			//{
+			//	Sounds::PlaySound(Fs);
+			//}
+			//
+			//if (ImGui::Button("   C\n(G#)###KeyPad12", { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(ImGuiKey_Keypad3, false))
+			//{
+			//	Sounds::PlaySound(Gs);
+			//}
 			ImGui::PopStyleColor();
 
 			ImGui::EndTable();
@@ -147,18 +216,37 @@ int OnGui()
 
 	ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
 	ImGui::BeginGroup();
+	{
+		auto settingsAvail = ImGui::GetContentRegionAvail();
 
-	ImGui::Text("Octave");
-	ImGui::SliderInt("###OctaveSlider", &currentSettings.octave, 0, 10);
-	//ImGui::Dummy({ 0, style.ItemSpacing.x });
+		ImGui::PushItemWidth((settingsAvail.x - style.ItemSpacing.x)/2);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { style.ItemSpacing.x, 0 });
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 0, style.FramePadding.y });
 
-	ImGui::Text("Volume");
-	ImGui::SliderFloat("###VolumeSlider", &currentSettings.volume, 0, 1);
-	//ImGui::Dummy({ 0, style.ItemSpacing.x });
+		ImGui::LabelText("###NoteLabel","Note"); ImGui::SameLine(); ImGui::LabelText("###KeyLabel","Key");
+		ImGui::PopStyleVar();
 
-	ImGui::Text("Use Saw Wave");
-	ImGui::Checkbox("###Use Saw WaveCB", &currentSettings.useSawWave);
+		if(ImGui::Combo("###NoteCombo", (int*)&currentSettings.selectedKey, notesList, 21))
+			RecalculateKeySignature(currentSettings.selectedScale, currentSettings.selectedKey);
+		ImGui::SameLine();
+		ImGui::PopStyleVar();
+		if(ImGui::Combo("###KeyCombo", (int*)&currentSettings.selectedScale, keysList, 2))
+			RecalculateKeySignature(currentSettings.selectedScale, currentSettings.selectedKey);
 
+		ImGui::PopItemWidth();
+
+
+		ImGui::Text("Octave");
+		ImGui::SliderInt("###OctaveSlider", &currentSettings.octave, 0, 10);
+		//ImGui::Dummy({ 0, style.ItemSpacing.x });
+
+		ImGui::Text("Volume");
+		ImGui::SliderFloat("###VolumeSlider", &currentSettings.volume, 0, 1);
+		//ImGui::Dummy({ 0, style.ItemSpacing.x });
+
+		ImGui::Text("Use Saw Wave");
+		ImGui::Checkbox("###Use Saw WaveCB", &currentSettings.useSawWave);
+	}
 	ImGui::EndGroup();
 	ImGui::PopItemWidth();
 
@@ -187,6 +275,13 @@ int main(int argc, char** argv)
 	Sounds::pBaseOctave = &currentSettings.octave;
 	Sounds::pVolume = &currentSettings.volume;
 	Sounds::pUseSawWave = &currentSettings.useSawWave;
+
+	for (int i = 0; i < 21; i++)
+	{
+		notesList[i] = Sounds::GetKeyName((Key)i);
+	}
+
+	RecalculateKeySignature(Major, Key_C);
 
 	while (true)
 	{

@@ -12,7 +12,12 @@ namespace Sounds
 
 	bool Setup();
 
-	const unsigned int sampleRate = 44100;//44100;
+	const char* GetKeyName(Key key, Scale scale = Major);
+	Note Key2Note(Key key);
+	Key Note2Key(Note note);
+	void GetKeySignature(Scale scale, Key baseKey, Key outSignature[7]);
+
+	const unsigned int sampleRate = 44100; // 44100;
 	inline float* pVolume;
 	inline bool isPlaying = false;
 
