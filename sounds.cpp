@@ -210,6 +210,13 @@ Key Sounds::Note2Key(Note note)
 void Sounds::GetKeySignature(Scale scale, Key baseKey, Key outSignature1[7])
 {
     Key outSignature[7];
+
+    // I guess I could also just remove these notes from the list itself, but this would introduce another mapping array and more calculations
+    if (baseKey == Key_Bs || baseKey == Key_Es)
+        baseKey = (Key)(baseKey + 2);
+    else if(baseKey == Key_Cb || baseKey == Key_Fb)
+        baseKey = (Key)(baseKey - 2);
+
     auto baseNote = Key2Note(baseKey);
     Note noteSignature[7]{};
 
@@ -241,9 +248,6 @@ void Sounds::GetKeySignature(Scale scale, Key baseKey, Key outSignature1[7])
     //    printf("Note %i: %s ", i, GetKeyName(Note2Key(noteSignature[i]), scale));
     //std::cout << std::endl;
 
-    for (int i = 0; i < 7; i++)
-        outSignature[i] = Note2Key(noteSignature[i]);
-
     outSignature[0] = baseKey;
 
     bool isBaseKeySharp = (baseKey) % 3 == 1;
@@ -254,6 +258,9 @@ void Sounds::GetKeySignature(Scale scale, Key baseKey, Key outSignature1[7])
 TryNewSignature:
 
     for (int i = 1; i < 7; i++)
+        outSignature[i] = Note2Key(noteSignature[i]);
+
+    for (int i = 1; i < 7; i++)
     {
         //if ((outSignature[i] + 1) % 3 == 0)
         //    continue;
@@ -262,19 +269,22 @@ TryNewSignature:
         bool isNeutral = ((outSignature[i]) % 3 == 0);
 
         // Make sure the note has the same accidental as the base note
-        if (isSharp != isBaseKeySharp && !isNeutral && !isBaseKeyNeutral)
+        //if (isSharp != isBaseKeySharp && !isNeutral && !isBaseKeyNeutral)
+        if (((isSharp != isBaseKeySharp) || (isNeutral != isBaseKeyNeutral)) && !isNeutral && !isBaseKeyNeutral)
         {
             if (isSharp)
                 outSignature[i] = (Key)abs((outSignature[i] + 1) % 21);
             else
                 outSignature[i] = (Key)abs((outSignature[i] - 1) % 21);
+
+            continue;
         }
 
         // Check if there are duplicate notes (ex. A and Ab, or Ab and A#)
-        bool isHigher = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] + 1) + 21) % 21)) != outSignature + 7);
-        bool isHigher2 = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] + 2) + 21) % 21)) != outSignature + 7) && !isNeutral;
-        bool isLower = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] - 1) + 21) % 21)) != outSignature + 7);
-        bool isLower2 = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] - 2) + 21) % 21)) != outSignature + 7) && !isNeutral;
+        bool isHigher = isBaseKeySharp &&(std::find(outSignature, outSignature + 7, abs(((outSignature[i] + 1) + 21) % 21)) != outSignature + 7);
+        bool isHigher2 = isBaseKeySharp &&(std::find(outSignature, outSignature + 7, abs(((outSignature[i] + 2) + 21) % 21)) != outSignature + 7) && (!isNeutral && !isSharp);
+        bool isLower = (!isBaseKeyNeutral && !isBaseKeySharp) && (std::find(outSignature, outSignature + 7, abs(((outSignature[i] - 1) + 21) % 21)) != outSignature + 7);
+        bool isLower2 = (!isBaseKeyNeutral && !isBaseKeySharp) && (std::find(outSignature, outSignature + 7, abs(((outSignature[i] - 2) + 21) % 21)) != outSignature + 7) && (!isNeutral && isSharp);
 
         if (isNeutral)
         {
@@ -289,23 +299,23 @@ TryNewSignature:
         else
         {
             // Try to avoid duplicates by moving for example a note G# to be Ab if there are no A, A#, or Ab notes.
-            if ((isHigher || isHigher2) && !isSharp && !isNeutral)
-                outSignature[i] = (Key)abs((outSignature[i] - (isHigher2 ? 2 : 1)) % 21);
+            if ((isHigher || isHigher2) && !isSharp)// && !isNeutral)
+                outSignature[i] = (Key)abs((outSignature[i] - (isHigher2 ? 1 : 1)) % 21);
 
-            if ((isLower || isLower2) && isSharp && isNeutral)
-                outSignature[i] = (Key)abs((outSignature[i] + (isLower2 ? 2 : 1)) % 21);
+            if ((isLower || isLower2) && isSharp)// && isNeutral)
+                outSignature[i] = (Key)abs((outSignature[i] + (isLower2 ? 1 : 1)) % 21);
         }
     }
 
     // Check if is correct
     if (retries <= 2)
     {
-        bool isCorrect = true;
-
-        std::copy(outSignature, outSignature + 7, outSignature1);
+        if(retries == 0)
+            std::copy(outSignature, outSignature + 7, outSignature1);
 
         for (int i = 1; i < 7; i++)
         {
+            bool isSharp = (outSignature[i]) % 3 == 1;
             bool isNeutral = ((outSignature[i]) % 3 == 0);
 
             bool isHigher = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] + 1) + 21) % 21)) != outSignature + 7);
@@ -314,10 +324,16 @@ TryNewSignature:
             bool isLower2 = (std::find(outSignature, outSignature + 7, abs(((outSignature[i] - 2) + 21) % 21)) != outSignature + 7) && !isNeutral;
 
             // If is wrong
-            if (isHigher || isHigher2 || isLower || isLower2)
+            if (((isHigher || isHigher2) && !isSharp) || ((isLower || isLower2) && isSharp))
             {
                 if (retries < 2)
+                {
+                    if (!isBaseKeySharp)
+                        outSignature[0] = (Key)abs((outSignature[0] + (isBaseKeySharp ? 1 : -1)) % 21);
                     isBaseKeySharp = !isBaseKeySharp;
+                }
+                else
+                    return;
                 if (isBaseKeyNeutral)
                 {
                     isBaseKeySharp = false;
@@ -327,10 +343,10 @@ TryNewSignature:
                 // Try again with assuming a different accidental on a base note
                 goto TryNewSignature;
             }
-            else // If already retried just return with the first signature
-                return;
         }
     }
+    // Good example of when the first run (assuming flats) is not correct is Db Minor. Trying to only use flats it would have to utilize double flat on B, and this is goofy ah, so It's better to just use sharps (assume it's C# minor).
+    // But I can also see how this can be undesired behaviour. 
 
     //for (int i = 0; i < 7; i++)
     //{

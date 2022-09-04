@@ -936,6 +936,8 @@ namespace ImGui
 
 } // namespace ImGui
 
+#include "imgui_extensions.h" // Custom widgets
+
 //-----------------------------------------------------------------------------
 // [SECTION] Flags & Enumerations
 //-----------------------------------------------------------------------------

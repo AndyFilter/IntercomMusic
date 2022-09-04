@@ -4,9 +4,11 @@
 
 #include "External/ImGui/imgui.h"
 #include "External/ImGui/imgui_internal.h"
+//#include "External/ImGui/imgui_extensions.h"
 #include "gui.h"
 #include "sounds.h"
 #include "structs.h"
+#include <chrono>
 
 HWND hwnd;
 
@@ -42,8 +44,10 @@ Note currentNoteSignature[7];
 
 void RecalculateKeySignature(Scale scale, Key baseKey)
 {
-	printf("Calculating Key Sig for key: %s, and scale %i\n", Sounds::GetKeyName(baseKey), scale);
+	auto start = std::chrono::high_resolution_clock::now();
 	Sounds::GetKeySignature(scale, baseKey, currentKeySignature);
+	printf("Calculating the signature for key: %s, and scale %i took: %lldus\n", Sounds::GetKeyName(baseKey), scale, 
+		std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count());
 
 	//std::sort(currentKeySignature, currentKeySignature + 7);
 
@@ -103,7 +107,7 @@ int OnGui()
 
 				auto currentKey = Key_C;
 
-				bool isEnabled = (std::find(currentNoteSignature, currentNoteSignature + 7, keypadIdx) != currentNoteSignature + 7);
+				bool isEnabled = !currentSettings.useScale || (std::find(currentNoteSignature, currentNoteSignature + 7, keypadIdx) != currentNoteSignature + 7);
 
 				if(isEnabled)
 					for (int x = 0; x < 7; x++)
@@ -116,10 +120,14 @@ int OnGui()
 						}
 					}
 
-				char buffer[64];
-				sprintf_s(buffer, "%s\n(%s)###KeyPad%i", keypadKeys[keypadIdx], Sounds::GetKeyName(isEnabled ? currentKey : Sounds::Note2Key((Note)keypadIdx)), keypadIdx);
+				const char* keyName = Sounds::GetKeyName((isEnabled && currentSettings.useScale) ? currentKey : Sounds::Note2Key((Note)keypadIdx));
+				char spaceBuffer[5]{'\0'};
+				if (keypadIdx != 11)
+				memset(spaceBuffer, ' ', min(strlen(keyName)+1, 5));
+				char buffer[64]{ '\0'};
+				sprintf_s(buffer, "%s%s\n(%s)###KeyPad%i", spaceBuffer, keypadKeys[keypadIdx], keyName, keypadIdx);
 
-				//ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_disabled])
+
 				if(!isEnabled)
 					ImGui::PushStyleVar(ImGuiStyleVar_Alpha, style.Alpha * style.DisabledAlpha);
 				if (ImGui::Button(buffer, { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(intecom2VKeypad[keypadIdx], false))
@@ -219,19 +227,28 @@ int OnGui()
 	{
 		auto settingsAvail = ImGui::GetContentRegionAvail();
 
-		ImGui::PushItemWidth((settingsAvail.x - style.ItemSpacing.x)/2);
+		ImGui::HeaderTitle("Sound");
+
+		ImVec2 scaleAvail = { settingsAvail.x - style.ItemSpacing.x * 2 , settingsAvail.y };
+		ImGui::PushItemWidth((settingsAvail.x - style.ItemSpacing.x)/2 - ImGui::GetFrameHeight());
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { style.ItemSpacing.x, 0 });
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 0, style.FramePadding.y });
 
+		ImGui::BeginDisabled(!currentSettings.useScale);
+		ImGui::Dummy({ ImGui::GetFrameHeight() , 0 }); ImGui::SameLine();
 		ImGui::LabelText("###NoteLabel","Note"); ImGui::SameLine(); ImGui::LabelText("###KeyLabel","Key");
+		ImGui::EndDisabled();
 		ImGui::PopStyleVar();
 
+		ImGui::Checkbox("###ScaleCB", &currentSettings.useScale); ImGui::SameLine();
+		ImGui::BeginDisabled(!currentSettings.useScale);
 		if(ImGui::Combo("###NoteCombo", (int*)&currentSettings.selectedKey, notesList, 21))
 			RecalculateKeySignature(currentSettings.selectedScale, currentSettings.selectedKey);
 		ImGui::SameLine();
 		ImGui::PopStyleVar();
 		if(ImGui::Combo("###KeyCombo", (int*)&currentSettings.selectedScale, keysList, 2))
 			RecalculateKeySignature(currentSettings.selectedScale, currentSettings.selectedKey);
+		ImGui::EndDisabled();
 
 		ImGui::PopItemWidth();
 
@@ -244,8 +261,34 @@ int OnGui()
 		ImGui::SliderFloat("###VolumeSlider", &currentSettings.volume, 0, 1);
 		//ImGui::Dummy({ 0, style.ItemSpacing.x });
 
-		ImGui::Text("Use Saw Wave");
-		ImGui::Checkbox("###Use Saw WaveCB", &currentSettings.useSawWave);
+		//ImGui::Text("Use Saw Wave");
+		//ImGui::Checkbox("###Use Saw WaveCB", &currentSettings.useSawWave);
+		ImGui::Spacing();
+
+		// Recording
+		ImGui::HeaderTitle("Recording");
+
+		ImGui::Checkbox("Static Delay", &currentSettings.useStaticDelay);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		ImGui::BeginDisabled(!currentSettings.useStaticDelay);
+		ImGui::DragInt("###DelayDrag", &currentSettings.delay, 1, 1, 1000, "%dms");
+		ImGui::EndDisabled();
+
+		if (ImGui::Button(currentSettings.isRecording ? "Stop" : "Record", {(settingsAvail.x - style.ItemSpacing.x)/2, 0}))
+		{
+			currentSettings.isRecording = !currentSettings.isRecording;
+			currentSettings.isRecordingPaused = false;
+		}
+
+		ImGui::SameLine();
+
+		ImGui::BeginDisabled(!currentSettings.isRecording);
+		if (ImGui::Button(currentSettings.isRecordingPaused ? "Resume" : "Pause", { (settingsAvail.x - style.ItemSpacing.x) / 2, 0 }))
+		{
+			currentSettings.isRecordingPaused = !currentSettings.isRecordingPaused;
+		}
+		ImGui::EndDisabled();
 	}
 	ImGui::EndGroup();
 	ImGui::PopItemWidth();

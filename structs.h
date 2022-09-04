@@ -67,8 +67,14 @@ struct Settings
 {
 	int octave = 6;
 	float volume = 0.1f;
-	bool useSawWave = false;
+	bool useSawWave = false; // unused
 
+	bool useScale = false;
 	Key selectedKey = Key_C;
 	Scale selectedScale = Major;
+
+	bool isRecording = false;
+	bool isRecordingPaused = false;
+	bool useStaticDelay = true;
+	int delay = 200;
 };
