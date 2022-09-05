@@ -94,7 +94,7 @@ HRESULT Win32XAudioInit(win32_audio_buffer* AudioBuffer)
     return S_OK;
 }
 
-const char* Sounds::GetKeyName(Key key, Scale scale)
+const char* Sounds::GetKeyName(Key key)
 {
         switch (key)
         {

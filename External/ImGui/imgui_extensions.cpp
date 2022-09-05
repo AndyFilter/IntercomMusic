@@ -1,6 +1,7 @@
 #include "imgui_internal.h"
 #include "imgui.h"
 #include "imgui_extensions.h"
+#include "../sounds.h"
 
 namespace ImGui
 {
@@ -47,4 +48,77 @@ namespace ImGui
 
 		EndGroup();
 	}
+
+    bool DrawRecEvKey(RecordingEvent& recEv, bool is_selected, int index, ImVec2 arg_size)
+    {
+        ImGuiContext& g = *GImGui;
+        const ImGuiStyle& style = g.Style;
+
+        char text[20]{ '\0' };
+        auto key_name = Sounds::GetKeyName((Key)recEv.value);
+        sprintf_s(text, "Key %s ##Key%i", key_name, index);
+
+        ImVec2 size = arg_size;
+        size.x = arg_size.x == 0 ? ImGui::CalcTextSize(text, NULL, true).x : arg_size.x;
+
+        ImGui::PushStyleColor(ImGuiCol_Text, { 0,0,0,0.95f });
+
+        ImVec4 baseKeyColor = ImVec4(0.7f, 1.f, 0.7f, 1.f);
+        PushStyleColor(ImGuiCol_Header, baseKeyColor);
+        baseKeyColor *= 0.85f;
+        baseKeyColor.w = 1;
+        PushStyleColor(ImGuiCol_HeaderHovered, baseKeyColor);
+        baseKeyColor *= 0.85f;
+        baseKeyColor.w = 1;
+        PushStyleColor(ImGuiCol_HeaderActive, baseKeyColor);
+
+        auto returnVal = Selectable(text, is_selected, 0, size, true);
+
+        ImGui::PopStyleColor(4);
+
+        return returnVal;
+    }
+
+    bool DrawRecEvDelay(RecordingEvent& recEv, int index, ImVec2 arg_size)
+    {
+        char text[20]{ '\0' };
+        auto key_name = Sounds::GetKeyName((Key)recEv.value);
+        sprintf_s(text, "##Delay%i", index);
+
+        auto size = ImGui::CalcTextSize("1000ms", NULL, true);
+        SetNextItemWidth(size.x + 5);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, { 0,0,0,0.95f });
+
+        ImVec4 baseDelayColor = ImVec4(1.f, 0.6f, 0.6f, 1.f);
+        PushStyleColor(ImGuiCol_FrameBg, baseDelayColor);
+        baseDelayColor *= 0.85f;
+        baseDelayColor.w = 1;
+        PushStyleColor(ImGuiCol_FrameBgHovered, baseDelayColor);
+        baseDelayColor *= 0.85f;
+        baseDelayColor.w = 1;
+        PushStyleColor(ImGuiCol_FrameBgActive, baseDelayColor);
+
+        auto returnVal = ImGui::DragInt(text, &recEv.value, 1, 1, 1000, "%dms");
+
+        ImGui::PopStyleColor(4);
+
+        return returnVal;
+    }
+
+    //bool RecEvent(RecordingEvent& recEv, bool is_selected, int index, ImVec2 arg_size)
+    //{
+    //    switch (recEv.type)
+    //    {
+    //    case RecEv_Key:
+    //        return DrawRecEvKey(recEv, is_selected, index, arg_size);
+    //        break;
+    //    case RecEv_Delay:
+    //        return DrawRecEvDelay(recEv, is_selected, index, arg_size);
+    //        break;
+    //    default:
+    //        break;
+    //    }
+    //    return false;
+    //}
 }

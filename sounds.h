@@ -12,7 +12,7 @@ namespace Sounds
 
 	bool Setup();
 
-	const char* GetKeyName(Key key, Scale scale = Major);
+	const char* GetKeyName(Key key);
 	Note Key2Note(Key key);
 	Key Note2Key(Note note);
 	void GetKeySignature(Scale scale, Key baseKey, Key outSignature[7]);

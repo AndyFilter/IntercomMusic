@@ -1,4 +1,6 @@
 #pragma once
+#include <vector>
+#include <Windows.h>
 
 enum Note
 {
@@ -77,4 +79,33 @@ struct Settings
 	bool isRecordingPaused = false;
 	bool useStaticDelay = true;
 	int delay = 200;
+};
+
+enum RecordingEventType
+{
+	RecEv_Key,
+	RecEv_Delay,
+};
+
+struct RecordingEvent
+{
+	RecordingEventType type;
+	int value;
+};
+
+struct Recording
+{
+	std::vector<RecordingEvent> data;
+
+	int64_t lastKeyTime = -1;
+	int selectedEvent = -1;
+	bool hideDealys = false;
+
+	char savePath[MAX_PATH];
+};
+
+struct ReplayState
+{
+	bool isPlaying = false;
+	bool isPaused = false;
 };

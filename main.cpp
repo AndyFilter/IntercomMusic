@@ -1,6 +1,10 @@
 #define WIN32_LEAN_AND_MEAN
 
+#include <Windows.h>
 #include <algorithm>
+#include <chrono>
+#include <vector>
+#include <commdlg.h>
 
 #include "External/ImGui/imgui.h"
 #include "External/ImGui/imgui_internal.h"
@@ -8,7 +12,7 @@
 #include "gui.h"
 #include "sounds.h"
 #include "structs.h"
-#include <chrono>
+#include "file_helper.h"
 
 HWND hwnd;
 
@@ -19,6 +23,8 @@ bool _wasNumLockPressedLastFrame = false;
 bool _wasNumLockRevertedLastFrame = false;
 
 Settings currentSettings;
+Recording currentRecording;
+ReplayState replayState;
 
 const char* notesList[21]{};
 const char* keysList[2] {"Major", "Minor"};
@@ -78,6 +84,60 @@ void SetNumLock(BOOL bState)
 	}
 }
 
+bool SaveCurrentRecording()
+{
+	char filename[MAX_PATH]{ "name" };
+	const char szExt[] = "IMR\0*.imr\0\0";
+
+	bool wasSucc = false;
+
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn, sizeof(ofn));
+
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = hwnd;
+	ofn.lpstrFile = filename;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrFilter = ofn.lpstrDefExt = szExt;
+	ofn.Flags = OFN_DONTADDTORECENT | OFN_OVERWRITEPROMPT;
+
+	if (GetSaveFileName(&ofn))
+	{
+		strcpy_s(currentRecording.savePath, filename);
+
+		wasSucc = FileHelper::SaveRecording(currentRecording, filename);
+	}
+
+	return wasSucc;
+}
+
+bool OpenRecording()
+{
+	char filename[MAX_PATH]{ "name" };
+	const char szExt[] = "IMR\0*.imr\0\0";
+
+	bool wasSucc = false;
+
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn, sizeof(ofn));
+
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = hwnd;
+	ofn.lpstrFile = filename;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrFilter = ofn.lpstrDefExt = szExt;
+	ofn.Flags = OFN_DONTADDTORECENT | OFN_OVERWRITEPROMPT;
+
+	if (GetOpenFileName(&ofn))
+	{
+		wasSucc = FileHelper::OpenRecording(currentRecording, filename);
+
+		strcpy_s(currentRecording.savePath, filename);
+	}
+
+	return wasSucc;
+}
+
 int OnGui()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -105,7 +165,7 @@ int OnGui()
 			{
 				int keypadIdx = idx2Keypad[i];
 
-				auto currentKey = Key_C;
+				auto currentKey = Sounds::Note2Key((Note)keypadIdx);
 
 				bool isEnabled = !currentSettings.useScale || (std::find(currentNoteSignature, currentNoteSignature + 7, keypadIdx) != currentNoteSignature + 7);
 
@@ -139,6 +199,26 @@ int OnGui()
 					}
 					else
 						Sounds::PlaySound((Note)keypadIdx);
+
+					if (currentSettings.isRecording && !currentSettings.isRecordingPaused)
+					{
+						auto notePlayTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+						if (currentRecording.data.size() > 0)
+							currentRecording.data.push_back({ RecEv_Delay, currentSettings.useStaticDelay ? currentSettings.delay : (int)(notePlayTime - currentRecording.lastKeyTime)});
+						else
+							currentRecording.data.push_back({ RecEv_Delay, 0 });
+
+						currentRecording.lastKeyTime = notePlayTime;
+
+						currentRecording.data.push_back({ RecEv_Key, (isEnabled && currentSettings.useScale) ? currentKey : Sounds::Note2Key((Note)keypadIdx) });
+					}
+					else if(!currentSettings.isRecordingPaused)
+					{
+						if (currentRecording.data.size() > 0 && currentRecording.selectedEvent >= 0)
+						{
+							currentRecording.data[currentRecording.selectedEvent].value = currentKey;
+						}
+					}
 				}
 				if (!isEnabled)
 					ImGui::PopStyleVar();
@@ -289,11 +369,75 @@ int OnGui()
 			currentSettings.isRecordingPaused = !currentSettings.isRecordingPaused;
 		}
 		ImGui::EndDisabled();
+
+		ImGui::BeginDisabled(currentRecording.data.size() <= 0);
+		if (ImGui::Button("Save", { (settingsAvail.x - style.ItemSpacing.x) / 2, 0}))
+		{
+			SaveCurrentRecording();
+		}
+		ImGui::EndDisabled();
+		ImGui::SameLine();
+		if (ImGui::Button("Open", { (settingsAvail.x - style.ItemSpacing.x) / 2, 0 }))
+		{
+			OpenRecording();
+		}
 	}
 	ImGui::EndGroup();
 	ImGui::PopItemWidth();
 
-	ImGui::PlotLines("AudioFunc", Sounds::bufferMem, 512 / (*Sounds::pBaseOctave + 1), 0, 0, 1.f, -1.f, {ImGui::GetContentRegionAvail().x, 200});
+	if (ImGui::BeginChild("Replay", { 0, 140 }, true))
+	{
+		ImVec2 replayAvail = ImGui::GetContentRegionAvail();
+
+		if (ImGui::BeginChild("ReplayNodes", { replayAvail.x ,ImGui::GetFrameHeight() + style.ScrollbarSize}, false, ImGuiWindowFlags_AlwaysHorizontalScrollbar))
+		{
+			for (size_t i = 0; i < currentRecording.data.size(); i++)
+			{
+				//bool isSelected = currentRecording.selectedEvent == i;
+				//if(ImGui::RecEvent(currentRecording.data[i], selected == i, i, {0, 0}))
+				//	selected = i;
+				bool is_selected = currentRecording.selectedEvent == i;
+				switch (currentRecording.data[i].type)
+				{
+				case RecEv_Key:
+					if (ImGui::DrawRecEvKey(currentRecording.data[i], is_selected, i))
+						currentRecording.selectedEvent = i;
+
+					if (is_selected && ImGui::IsMouseReleased(0) && ImGui::IsItemHovered())
+					{
+						currentRecording.selectedEvent = -1;
+					}
+					break;
+				case RecEv_Delay:
+					ImGui::DrawRecEvDelay(currentRecording.data[i], i);
+					break;
+				default:
+					break;
+				}
+
+				if (i < currentRecording.data.size() - 1)
+					ImGui::SameLine();
+			}
+			ImGui::SameLine();
+			ImGui::Dummy({ 0,10 });
+		}
+		ImGui::EndChild();
+
+		float controlButtonWidth = (replayAvail.x - style.ItemSpacing.x) / 2 ;
+
+		if (ImGui::Button(replayState.isPlaying ? "Stop" : "Play", { controlButtonWidth, 0 }))
+		{
+			replayState.isPlaying = !replayState.isPlaying;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(replayState.isPaused ? "Resume" : "Pause", { controlButtonWidth, 0 }))
+		{
+			replayState.isPaused = !replayState.isPaused;
+		}
+	}
+	ImGui::EndChild();
+
+	ImGui::PlotLines("AudioFunc", Sounds::bufferMem, 512 / (*Sounds::pBaseOctave + 1), 0, 0, 1.f, -1.f, {ImGui::GetContentRegionAvail().x, -1 });
 
 	if (_wasNumLockPressedLastFrame && GetForegroundWindow() == hwnd)
 	{
