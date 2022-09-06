@@ -87,7 +87,7 @@ void SetNumLock(BOOL bState)
 bool SaveCurrentRecording()
 {
 	char filename[MAX_PATH]{ "name" };
-	const char szExt[] = "IMR\0*.imr\0\0";
+	const char szExt[] = "IMR\0*.imr\0\0"; // Intercom Music Recording (IMR)
 
 	bool wasSucc = false;
 
@@ -389,6 +389,7 @@ int OnGui()
 	{
 		ImVec2 replayAvail = ImGui::GetContentRegionAvail();
 
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.9f, 0.9f, 0.9f, 1.00f));
 		if (ImGui::BeginChild("ReplayNodes", { replayAvail.x ,ImGui::GetFrameHeight() + style.ScrollbarSize}, false, ImGuiWindowFlags_AlwaysHorizontalScrollbar))
 		{
 			for (size_t i = 0; i < currentRecording.data.size(); i++)
@@ -396,7 +397,10 @@ int OnGui()
 				//bool isSelected = currentRecording.selectedEvent == i;
 				//if(ImGui::RecEvent(currentRecording.data[i], selected == i, i, {0, 0}))
 				//	selected = i;
+				char popupName[34];
+				sprintf_s(popupName, "Delete this item?##ItemDel%lld", i);
 				bool is_selected = currentRecording.selectedEvent == i;
+				auto item = currentRecording.data[i];
 				switch (currentRecording.data[i].type)
 				{
 				case RecEv_Key:
@@ -409,10 +413,39 @@ int OnGui()
 					}
 					break;
 				case RecEv_Delay:
-					ImGui::DrawRecEvDelay(currentRecording.data[i], i);
+					ImGui::DrawRecEvDelay(currentRecording.data[i], i, currentRecording.moveMode);
 					break;
 				default:
 					break;
+				}
+
+				if (ImGui::IsItemActive() && !ImGui::IsItemHovered())
+				{
+					printf("Curr Delta: %f\n", ImGui::GetMouseDragDelta(0).x);
+					int n_next = i + (ImGui::GetMouseDragDelta(0).x < 0.f ? -1 : 1);
+					printf("Next item: %i\n", n_next);
+					if (n_next >= 0 && n_next < currentRecording.data.size())
+					{
+						currentRecording.data[i] = currentRecording.data[n_next];
+						currentRecording.data[n_next] = item;
+						ImGui::ResetMouseDragDelta();
+						printf("\nMoved!\n\n");
+					}
+				}
+
+				if (ImGui::IsItemClicked(1))
+				{
+					ImGui::OpenPopup(popupName);
+				}
+
+				if (ImGui::BeginPopup(popupName))
+				{
+					if (ImGui::Button("Delete"))
+					{
+						currentRecording.data.erase(currentRecording.data.begin() + i);
+						ImGui::CloseCurrentPopup();
+					}
+					ImGui::EndPopup();
 				}
 
 				if (i < currentRecording.data.size() - 1)
@@ -421,6 +454,7 @@ int OnGui()
 			ImGui::SameLine();
 			ImGui::Dummy({ 0,10 });
 		}
+		ImGui::PopStyleColor();
 		ImGui::EndChild();
 
 		float controlButtonWidth = (replayAvail.x - style.ItemSpacing.x) / 2 ;
@@ -428,12 +462,23 @@ int OnGui()
 		if (ImGui::Button(replayState.isPlaying ? "Stop" : "Play", { controlButtonWidth, 0 }))
 		{
 			replayState.isPlaying = !replayState.isPlaying;
+			if (replayState.isPlaying)
+				Sounds::PlayReplay(currentRecording, &replayState.isPlaying,&replayState.isPaused, &replayState.progress);
+			else
+				replayState.progress = 0;
+
+			replayState.isPaused = false;
 		}
 		ImGui::SameLine();
+		ImGui::BeginDisabled(!replayState.isPlaying);
 		if (ImGui::Button(replayState.isPaused ? "Resume" : "Pause", { controlButtonWidth, 0 }))
 		{
 			replayState.isPaused = !replayState.isPaused;
+			if(!replayState.isPaused)
+				Sounds::PlayReplay(currentRecording, &replayState.isPlaying, &replayState.isPaused, &replayState.progress);
 		}
+		ImGui::EndDisabled();
+		ImGui::Checkbox("Move Mode", &currentRecording.moveMode);
 	}
 	ImGui::EndChild();
 

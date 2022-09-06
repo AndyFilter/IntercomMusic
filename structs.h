@@ -100,6 +100,7 @@ struct Recording
 	int64_t lastKeyTime = -1;
 	int selectedEvent = -1;
 	bool hideDealys = false;
+	bool moveMode = false;
 
 	char savePath[MAX_PATH];
 };
@@ -108,4 +109,5 @@ struct ReplayState
 {
 	bool isPlaying = false;
 	bool isPaused = false;
+	int progress = -1;
 };

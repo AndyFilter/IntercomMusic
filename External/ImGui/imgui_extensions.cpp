@@ -58,8 +58,11 @@ namespace ImGui
         auto key_name = Sounds::GetKeyName((Key)recEv.value);
         sprintf_s(text, "Key %s ##Key%i", key_name, index);
 
+        auto labelSize = ImGui::CalcTextSize(text, NULL, true);
+
         ImVec2 size = arg_size;
-        size.x = arg_size.x == 0 ? ImGui::CalcTextSize(text, NULL, true).x : arg_size.x;
+        size.x = arg_size.x == 0 ? labelSize.x : arg_size.x;
+        size.y = arg_size.y == 0 ? labelSize.y + style.FramePadding.y * 2.0f - style.ItemSpacing.y : arg_size.y;
 
         ImGui::PushStyleColor(ImGuiCol_Text, { 0,0,0,0.95f });
 
@@ -72,14 +75,21 @@ namespace ImGui
         baseKeyColor.w = 1;
         PushStyleColor(ImGuiCol_HeaderActive, baseKeyColor);
 
-        auto returnVal = Selectable(text, is_selected, 0, size, true);
+        ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, { 0.5f, 0.5f });
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - style.FramePadding.y + style.ItemSpacing.y/2);
+        //ImGui::Dummy({ style.ItemSpacing.x, 5 });
+        //ImGui::SameLine();
+        auto returnVal = Selectable(text, is_selected, ImGuiSelectableFlags_UseSpacing , size, true);
+        //ImGui::SameLine();
+        //ImGui::Dummy({ style.ItemSpacing.x, 5 });
+        ImGui::PopStyleVar();
 
         ImGui::PopStyleColor(4);
 
         return returnVal;
     }
 
-    bool DrawRecEvDelay(RecordingEvent& recEv, int index, ImVec2 arg_size)
+    bool DrawRecEvDelay(RecordingEvent& recEv, int index, bool moveMode, ImVec2 arg_size)
     {
         char text[20]{ '\0' };
         auto key_name = Sounds::GetKeyName((Key)recEv.value);
@@ -99,7 +109,7 @@ namespace ImGui
         baseDelayColor.w = 1;
         PushStyleColor(ImGuiCol_FrameBgActive, baseDelayColor);
 
-        auto returnVal = ImGui::DragInt(text, &recEv.value, 1, 1, 1000, "%dms");
+        auto returnVal = ImGui::DragInt(text, &recEv.value, 1, 1, 1000, "%dms", moveMode ? ImGuiSliderFlags_ReadOnly : 0);
 
         ImGui::PopStyleColor(4);
 

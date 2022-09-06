@@ -447,3 +447,33 @@ void Sounds::PlaySound(Note note, DWORD dwMillis, FunctionType funcType, int oct
     stopThread.detach();
 
 }
+
+void ReplayThread(Recording *rec, bool* is_playing, bool* is_paused, int* progress)
+{
+    for (*progress = (*progress) > 0 ? *progress : 0; *progress < rec->data.size(); (*progress)++)
+    {
+        //while (*is_paused) Sleep(1);
+        if (!*is_playing || *is_paused)
+            return;
+
+        switch (rec->data[*progress].type)
+        {
+        case RecEv_Key:
+            Sounds::PlaySound(Sounds::Key2Note((Key)rec->data[*progress].value));
+            break;
+        case RecEv_Delay:
+            Sleep(rec->data[*progress].value);
+            break;
+        default:
+            break;
+        }
+    }
+    *is_playing = false;
+    *progress = 0;
+}
+
+void Sounds::PlayReplay(Recording& rec, bool* is_playing, bool* is_paused, int* progress)
+{
+    replayThread = std::thread(ReplayThread, &rec, is_playing, is_paused, progress);
+    replayThread.detach();
+}
