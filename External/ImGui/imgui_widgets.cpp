@@ -6315,8 +6315,10 @@ bool ImGui::Selectable(const char* label, bool selected, ImGuiSelectableFlags fl
     ImVec2 pos = window->DC.CursorPos;
     pos.y += window->DC.CurrLineTextBaseOffset;
     size.x += (flags & ImGuiSelectableFlags_UseSpacing) ? (style.ItemSpacing.x * 2) : 0.f;
-    size.y = (flags & ImGuiSelectableFlags_UseSpacing) ? (label_size.y + style.FramePadding.y * 2) : 0.f;
-    ItemSize(size, 0.0f);
+    //size.y = (flags & ImGuiSelectableFlags_UseSpacing) ? (label_size.y + style.FramePadding.y * 2) : size.y;
+    size.y += (flags & ImGuiSelectableFlags_UseSpacing) ? 3 : 0;
+    //const ImRect frame_bb(window->DC.CursorPos, window->DC.CursorPos + ImVec2(size.x, label_size.y + style.FramePadding.y * 2.0f));
+    ItemSize(size, (flags & ImGuiSelectableFlags_UseSpacing) ? style.FramePadding.y : 0.0f);
 
     // Fill horizontal space
     // We don't support (size < 0.0f) in Selectable() because the ItemSpacing extension would make explicitly right-aligned sizes not visibly match other widgets.
@@ -6354,7 +6356,13 @@ bool ImGui::Selectable(const char* label, bool selected, ImGuiSelectableFlags fl
         //bb.Min.y += spacing_U;
         bb.Max.x -= (spacing_x - spacing_L);
         //bb.Max.y -= (spacing_y - spacing_U);
+
+        //bb = ImRect(window->DC.CursorPos, window->DC.CursorPos + ImVec2(size.x, (label_size.y + style.FramePadding.y * 2)));
     }
+
+    bb.Min.y -= 4;
+    bb.Max.y -= 4;
+
     //if (g.IO.KeyCtrl) { GetForegroundDrawList()->AddRect(bb.Min, bb.Max, IM_COL32(0, 255, 0, 255)); }
 
     // Modify ClipRect for the ItemAdd(), faster than doing a PushColumnsBackground/PushTableBackground for every Selectable..
