@@ -76,7 +76,7 @@ namespace ImGui
         PushStyleColor(ImGuiCol_HeaderActive, baseKeyColor);
 
         ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, { 0.5f, 0.5f });
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - style.FramePadding.y + style.ItemSpacing.y/2);
+        //ImGui::SetCursorPosY(ImGui::GetCursorPosY() - style.FramePadding.y + style.ItemSpacing.y/2);
         //ImGui::Dummy({ style.ItemSpacing.x, 5 });
         //ImGui::SameLine();
         auto returnVal = Selectable(text, is_selected, ImGuiSelectableFlags_UseSpacing , size, true);
@@ -91,6 +91,9 @@ namespace ImGui
 
     bool DrawRecEvDelay(RecordingEvent& recEv, int index, bool moveMode, ImVec2 arg_size)
     {
+        ImGuiContext& g = *GImGui;
+        const ImGuiStyle& style = g.Style;
+
         char text[20]{ '\0' };
         auto key_name = Sounds::GetKeyName((Key)recEv.value);
         sprintf_s(text, "##Delay%i", index);
@@ -100,18 +103,46 @@ namespace ImGui
 
         ImGui::PushStyleColor(ImGuiCol_Text, { 0,0,0,0.95f });
 
-        ImVec4 baseDelayColor = ImVec4(1.f, 0.6f, 0.6f, 1.f);
-        PushStyleColor(ImGuiCol_FrameBg, baseDelayColor);
-        baseDelayColor *= 0.85f;
-        baseDelayColor.w = 1;
-        PushStyleColor(ImGuiCol_FrameBgHovered, baseDelayColor);
-        baseDelayColor *= 0.85f;
-        baseDelayColor.w = 1;
-        PushStyleColor(ImGuiCol_FrameBgActive, baseDelayColor);
+        //ImVec4 baseDelayColor = ImVec4(1.f, 0.6f, 0.6f, 1.f);
+        ImVec4 baseDelayColor = ImVec4(1.f, 0.8f, 0.8f, 1.f);
 
-        auto returnVal = ImGui::DragInt(text, &recEv.value, 1, 1, 1000, "%dms", moveMode ? ImGuiSliderFlags_ReadOnly : 0);
+        auto returnVal = false;
+        
+        if (moveMode)
+        {
+            char labelText[24];
+            sprintf_s(labelText, "%dms##Delay%i", recEv.value, index);
 
-        ImGui::PopStyleColor(4);
+            PushStyleColor(ImGuiCol_Header, baseDelayColor);
+            baseDelayColor *= 0.85f;
+            baseDelayColor.w = 1;
+            PushStyleColor(ImGuiCol_HeaderHovered, baseDelayColor);
+            baseDelayColor *= 0.85f;
+            baseDelayColor.w = 1;
+            PushStyleColor(ImGuiCol_HeaderActive, baseDelayColor);
+
+            ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, { 0.5f, 0.5f });
+            size.y = arg_size.y == 0 ? size.y + style.FramePadding.y * 2.0f - style.ItemSpacing.y : arg_size.y;
+            size.x -= 2 * style.ItemSpacing.x - 5;
+            Selectable(labelText, false, ImGuiSelectableFlags_UseSpacing, size, true);
+
+            ImGui::PopStyleVar();
+
+            ImGui::PopStyleColor(4);
+        }
+        else
+        {
+            PushStyleColor(ImGuiCol_FrameBg, baseDelayColor);
+            baseDelayColor *= 0.85f;
+            baseDelayColor.w = 1;
+            PushStyleColor(ImGuiCol_FrameBgHovered, baseDelayColor);
+            baseDelayColor *= 0.85f;
+            baseDelayColor.w = 1;
+            PushStyleColor(ImGuiCol_FrameBgActive, baseDelayColor);
+            returnVal = ImGui::DragInt(text, &recEv.value, 1, 1, 1000, "%dms", moveMode ? ImGuiSliderFlags_ReadOnly : 0);
+
+            ImGui::PopStyleColor(4);
+        }
 
         return returnVal;
     }

@@ -462,9 +462,10 @@ void ReplayThread(Recording *rec, bool* is_playing, bool* is_paused, int* progre
             Sounds::PlaySound(Sounds::Key2Note((Key)rec->data[*progress].value));
             break;
         case RecEv_Delay:
-            Sleep(rec->data[*progress].value);
-            break;
-        default:
+            //auto start = std::chrono::high_resolution_clock::now();
+            std::this_thread::sleep_for(std::chrono::milliseconds(max(rec->data[*progress].value-8, 0)));
+            //Sleep(rec->data[*progress].value);
+            //printf("%i delay took %lld\n", rec->data[*progress].value, std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count());
             break;
         }
     }

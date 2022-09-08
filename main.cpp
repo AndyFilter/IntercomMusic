@@ -381,6 +381,30 @@ int OnGui()
 		{
 			OpenRecording();
 		}
+		if (ImGui::Button("Clear", { settingsAvail.x , 0}))
+		{
+			ImGui::OpenPopup("Are you sure?##ClearRecordingPopup");
+		}
+
+		if (ImGui::BeginPopupModal("Are you sure?##ClearRecordingPopup", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			ImGui::Text("Are you sure you want to clear the recording?");
+			ImGui::Separator();
+
+			auto avail = ImGui::GetContentRegionAvail().x - style.ItemSpacing.x;
+
+			if (ImGui::Button("Clear", { avail / 2, 0}))
+			{
+				currentRecording.data.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Cancel", { avail / 2, 0 }))
+			{
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
 	}
 	ImGui::EndGroup();
 	ImGui::PopItemWidth();
@@ -389,9 +413,37 @@ int OnGui()
 	{
 		ImVec2 replayAvail = ImGui::GetContentRegionAvail();
 
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.9f, 0.9f, 0.9f, 1.00f));
-		if (ImGui::BeginChild("ReplayNodes", { replayAvail.x ,ImGui::GetFrameHeight() + style.ScrollbarSize}, false, ImGuiWindowFlags_AlwaysHorizontalScrollbar))
+		float controlButtonWidth = (replayAvail.x - style.ItemSpacing.x) / 2;
+
+		ImGui::BeginDisabled(currentRecording.data.size() <= 0);
+
+		if (ImGui::Button(replayState.isPlaying ? "Stop" : "Play", { controlButtonWidth, 0 }))
 		{
+			replayState.isPlaying = !replayState.isPlaying;
+			if (replayState.isPlaying)
+				Sounds::PlayReplay(currentRecording, &replayState.isPlaying, &replayState.isPaused, &replayState.progress);
+			else
+				replayState.progress = 0;
+
+			replayState.isPaused = false;
+		}
+		ImGui::EndDisabled();
+		ImGui::SameLine();
+		ImGui::BeginDisabled(!replayState.isPlaying);
+		if (ImGui::Button(replayState.isPaused ? "Resume" : "Pause", { controlButtonWidth, 0 }))
+		{
+			replayState.isPaused = !replayState.isPaused;
+			if (!replayState.isPaused)
+				Sounds::PlayReplay(currentRecording, &replayState.isPlaying, &replayState.isPaused, &replayState.progress);
+		}
+		ImGui::EndDisabled();
+
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.9f, 0.9f, 0.9f, 1.00f));
+		if (ImGui::BeginChild("ReplayNodes", { replayAvail.x, ImGui::GetFrameHeight() + style.ScrollbarSize}, false, ImGuiWindowFlags_AlwaysHorizontalScrollbar))
+		{
+			//ImGui::Dummy({ 5, ImGui::GetFrameHeight() });
+			//ImGui::SameLine();
+			auto _currentRecCopy = currentRecording;
 			for (size_t i = 0; i < currentRecording.data.size(); i++)
 			{
 				//bool isSelected = currentRecording.selectedEvent == i;
@@ -399,12 +451,16 @@ int OnGui()
 				//	selected = i;
 				char popupName[34];
 				sprintf_s(popupName, "Delete this item?##ItemDel%lld", i);
-				bool is_selected = currentRecording.selectedEvent == i;
-				auto item = currentRecording.data[i];
-				switch (currentRecording.data[i].type)
+				bool is_selected = _currentRecCopy.selectedEvent == i;
+				auto item = _currentRecCopy.data[i];
+				switch (_currentRecCopy.data[i].type)
 				{
 				case RecEv_Key:
-					if (ImGui::DrawRecEvKey(currentRecording.data[i], is_selected, i))
+					//if (i == 0)
+					//{
+					//	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (style.FramePadding.y/2));
+					//}
+					if (ImGui::DrawRecEvKey(_currentRecCopy.data[i], is_selected, i))
 						currentRecording.selectedEvent = i;
 
 					if (is_selected && ImGui::IsMouseReleased(0) && ImGui::IsItemHovered())
@@ -413,18 +469,20 @@ int OnGui()
 					}
 					break;
 				case RecEv_Delay:
-					ImGui::DrawRecEvDelay(currentRecording.data[i], i, currentRecording.moveMode);
+					ImGui::DrawRecEvDelay(currentRecording.data[i], i, _currentRecCopy.moveMode);
+					if (ImGui::IsItemClicked(0))
+						currentRecording.selectedEvent = i;
 					break;
 				default:
 					break;
 				}
 
-				if (ImGui::IsItemActive() && !ImGui::IsItemHovered())
+				if (ImGui::IsItemActive() && !ImGui::IsItemHovered() && currentRecording.moveMode)
 				{
 					printf("Curr Delta: %f\n", ImGui::GetMouseDragDelta(0).x);
 					int n_next = i + (ImGui::GetMouseDragDelta(0).x < 0.f ? -1 : 1);
 					printf("Next item: %i\n", n_next);
-					if (n_next >= 0 && n_next < currentRecording.data.size())
+					if (n_next >= 0 && n_next < currentRecording.data.size() && ImGui::GetMouseDragDelta(0).x != 0)
 					{
 						currentRecording.data[i] = currentRecording.data[n_next];
 						currentRecording.data[n_next] = item;
@@ -457,28 +515,12 @@ int OnGui()
 		ImGui::PopStyleColor();
 		ImGui::EndChild();
 
-		float controlButtonWidth = (replayAvail.x - style.ItemSpacing.x) / 2 ;
-
-		if (ImGui::Button(replayState.isPlaying ? "Stop" : "Play", { controlButtonWidth, 0 }))
-		{
-			replayState.isPlaying = !replayState.isPlaying;
-			if (replayState.isPlaying)
-				Sounds::PlayReplay(currentRecording, &replayState.isPlaying,&replayState.isPaused, &replayState.progress);
-			else
-				replayState.progress = 0;
-
-			replayState.isPaused = false;
-		}
-		ImGui::SameLine();
-		ImGui::BeginDisabled(!replayState.isPlaying);
-		if (ImGui::Button(replayState.isPaused ? "Resume" : "Pause", { controlButtonWidth, 0 }))
-		{
-			replayState.isPaused = !replayState.isPaused;
-			if(!replayState.isPaused)
-				Sounds::PlayReplay(currentRecording, &replayState.isPlaying, &replayState.isPaused, &replayState.progress);
-		}
-		ImGui::EndDisabled();
 		ImGui::Checkbox("Move Mode", &currentRecording.moveMode);
+		ImGui::SameLine();
+		if (ImGui::Button("Insert Delay", { 0,0 }))
+		{
+			currentRecording.data.insert(currentRecording.data.begin() + ((currentRecording.selectedEvent >= 0) ? currentRecording.selectedEvent : 0) + 1, { RecEv_Delay , 200});
+		}
 	}
 	ImGui::EndChild();
 

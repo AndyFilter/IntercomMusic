@@ -6313,11 +6313,8 @@ bool ImGui::Selectable(const char* label, bool selected, ImGuiSelectableFlags fl
     ImVec2 label_size = CalcTextSize(label, NULL, true);
     ImVec2 size(size_arg.x != 0.0f ? size_arg.x : label_size.x, size_arg.y != 0.0f ? size_arg.y : label_size.y);
     ImVec2 pos = window->DC.CursorPos;
-    pos.y += window->DC.CurrLineTextBaseOffset;
+    pos.y += (flags & ImGuiSelectableFlags_UseSpacing) ? 0 : window->DC.CurrLineTextBaseOffset;
     size.x += (flags & ImGuiSelectableFlags_UseSpacing) ? (style.ItemSpacing.x * 2) : 0.f;
-    //size.y = (flags & ImGuiSelectableFlags_UseSpacing) ? (label_size.y + style.FramePadding.y * 2) : size.y;
-    size.y += (flags & ImGuiSelectableFlags_UseSpacing) ? 3 : 0;
-    //const ImRect frame_bb(window->DC.CursorPos, window->DC.CursorPos + ImVec2(size.x, label_size.y + style.FramePadding.y * 2.0f));
     ItemSize(size, (flags & ImGuiSelectableFlags_UseSpacing) ? style.FramePadding.y : 0.0f);
 
     // Fill horizontal space
@@ -6334,7 +6331,7 @@ bool ImGui::Selectable(const char* label, bool selected, ImGuiSelectableFlags fl
 
     // Selectables are meant to be tightly packed together with no click-gap, so we extend their box to cover spacing between selectable.
     ImRect bb(min_x, pos.y, text_max.x, text_max.y);
-    if ((flags & ImGuiSelectableFlags_NoPadWithHalfSpacing) == 0)
+    if ((flags & ImGuiSelectableFlags_NoPadWithHalfSpacing) == 0 && !(flags & ImGuiSelectableFlags_UseSpacing))
     {
         const float spacing_x = span_all_columns ? 0.0f : style.ItemSpacing.x;
         const float spacing_y = style.ItemSpacing.y;
@@ -6348,20 +6345,10 @@ bool ImGui::Selectable(const char* label, bool selected, ImGuiSelectableFlags fl
 
     if (flags & ImGuiSelectableFlags_UseSpacing)
     {
-        const float spacing_x = span_all_columns ? 0.0f : style.ItemSpacing.x;
         const float spacing_y = style.ItemSpacing.y;
-        const float spacing_L = IM_FLOOR(spacing_x * 0.50f);
         const float spacing_U = IM_FLOOR(spacing_y * 0.50f);
-        bb.Min.x += spacing_L;
-        //bb.Min.y += spacing_U;
-        bb.Max.x -= (spacing_x - spacing_L);
-        //bb.Max.y -= (spacing_y - spacing_U);
-
-        //bb = ImRect(window->DC.CursorPos, window->DC.CursorPos + ImVec2(size.x, (label_size.y + style.FramePadding.y * 2)));
+        bb.Max.y += (spacing_y - spacing_U) * 2;
     }
-
-    bb.Min.y -= 4;
-    bb.Max.y -= 4;
 
     //if (g.IO.KeyCtrl) { GetForegroundDrawList()->AddRect(bb.Min, bb.Max, IM_COL32(0, 255, 0, 255)); }
 
@@ -6453,7 +6440,7 @@ bool ImGui::Selectable(const char* label, bool selected, ImGuiSelectableFlags fl
     else if (span_all_columns && g.CurrentTable)
         TablePopBackgroundChannel();
 
-    RenderTextClipped(text_min, text_max, label, NULL, &label_size, style.SelectableTextAlign, &bb);
+    RenderTextClipped((flags& ImGuiSelectableFlags_UseSpacing) ? bb.Min : text_min, (flags& ImGuiSelectableFlags_UseSpacing) ? bb.Max : text_max, label, NULL, &label_size, style.SelectableTextAlign, &bb);
 
     // Automatically close popups
     if (pressed && (window->Flags & ImGuiWindowFlags_Popup) && !(flags & ImGuiSelectableFlags_DontClosePopups) && !(g.LastItemData.InFlags & ImGuiItemFlags_SelectableDontClosePopup))
