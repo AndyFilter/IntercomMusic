@@ -16,6 +16,10 @@
 
 HWND hwnd;
 
+const int max_note_warmup_time = 10000;
+const ImVec4 playAlongButtonColor = (ImVec4)ImColor(0.5f, 0.9f, 0.4f);
+const float warmupTimeRatio = 0.9f;
+
 bool useVsync = true;
 float soundGraph[512];
 
@@ -27,7 +31,7 @@ Recording currentRecording;
 ReplayState replayState;
 
 const char* notesList[21]{};
-const char* keysList[2] {"Major", "Minor"};
+const char* keysList[2]{ "Major", "Minor" };
 //const char* keypadKeys[12]{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "Key", "0", "C" };
 const char* keypadKeys[12]{ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "Key" };
 const ImGuiKey intecom2VKeypad[12]{ ImGuiKey_Keypad2,ImGuiKey_NumLock, ImGuiKey_KeypadDivide, ImGuiKey_KeypadMultiply, ImGuiKey_Keypad7, ImGuiKey_Keypad8, ImGuiKey_Keypad9,ImGuiKey_Keypad4,ImGuiKey_Keypad5,ImGuiKey_Keypad6,ImGuiKey_Keypad3,ImGuiKey_Keypad1 };
@@ -37,7 +41,7 @@ const int idx2Keypad[12]{ 1, 4, 7, 11, 2, 5, 8, 0, 3, 6, 9, 10 };
 Key currentKeySignature[7];
 Note currentNoteSignature[7];
 
-/* 
+/*
 -------- TODO --------
 
 + Selectable keys
@@ -48,11 +52,19 @@ Note currentNoteSignature[7];
 ----------------------
  */
 
+static LARGE_INTEGER StartingTime{ 0 };
+
+int64_t millis()
+{
+	return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+
 void RecalculateKeySignature(Scale scale, Key baseKey)
 {
 	auto start = std::chrono::high_resolution_clock::now();
 	Sounds::GetKeySignature(scale, baseKey, currentKeySignature);
-	printf("Calculating the signature for key: %s, and scale %i took: %lldus\n", Sounds::GetKeyName(baseKey), scale, 
+	printf("Calculating the signature for key: %s, and scale %i took: %lldus\n", Sounds::GetKeyName(baseKey), scale,
 		std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count());
 
 	//std::sort(currentKeySignature, currentKeySignature + 7);
@@ -147,19 +159,108 @@ int OnGui()
 	ImGui::Text("Average framerate: %f", io.Framerate);
 #endif // _DEBUG
 
+	bool wasNewRecEntryAdded = false;
 
-	if (ImGui::BeginChild("Keypad", {270,360}, true))
+	if (ImGui::BeginChild("Keypad", { 270,360 }, true))
 	{
 		auto keypadAvail = ImGui::GetContentRegionAvail();
 		if (ImGui::BeginTable("KeypadTable", 3))
 		{
 			ImGui::TableNextRow();
-			
+
 			keypadAvail.x -= style.CellPadding.x * 2 + style.WindowPadding.x;
 			keypadAvail.y -= style.CellPadding.y * 3 + style.WindowPadding.y;
 			ImGui::TableSetColumnIndex(0);
 
 			ImGui::PushStyleColor(ImGuiCol_Text, { 0,0,0,0.95f });
+
+			Note playAlongNote = (Note)-1;
+			float playAlongProgress = 0;
+			static int delaysNum {1};
+
+			if (replayState.isPlayingAlong)
+			{
+				auto timeNow = millis();
+
+				if (replayState.lastNotePlayTime == -1)
+					replayState.lastNotePlayTime = timeNow;
+				else
+				{
+
+					if (replayState.progress < 0)
+						replayState.progress = 0;
+					//if (replayState.progress == 0 && currentRecording.data[0].type == RecEv_Delay)
+					//	replayState.lastNotePlayTime = timeNow + 1000;
+
+					switch (currentRecording.data[replayState.progress].type)
+					{
+					case RecEv_Key:
+						if (replayState.progress > 0 || (replayState.progress == 0 && playAlongProgress == 1))
+						{
+							playAlongNote = Sounds::Key2Note((Key)currentRecording.data[replayState.progress].value);
+							replayState.lastNotePlayTime = timeNow;
+							replayState.progress++;
+							break;
+						}
+						// Fallthrough on porpouse.
+					case RecEv_Delay:
+						// This part can only run when progress changes
+						if (currentRecording.data[replayState.progress].type == RecEv_Key && replayState.progress == 0)
+							delaysNum = -1;
+						else
+							delaysNum = 1;
+						float delayTime = (float)(replayState.progress == 0) ? 1000 : min(max_note_warmup_time, currentRecording.data[replayState.progress].value);
+						if (currentRecording.data[replayState.progress + 1].type == RecEv_Delay)
+						{
+							for (size_t i = replayState.progress + 1; i < currentRecording.data.size(); i++)
+							{
+								if (currentRecording.data[i].type == RecEv_Delay)
+									delayTime += currentRecording.data[i].value;
+								else
+									break;
+								delaysNum++;
+							}
+						}
+						delayTime = (delayTime * 100 / replayState.playbackSpeedPercent);
+						auto warmupTime = (float)(delayTime * warmupTimeRatio);
+						float overallDelayProgress = max(min((timeNow - replayState.lastNotePlayTime) / delayTime, 1), 0);
+						//playAlongProgress *= (playAlongProgress > (1 - warmupTimeRatio)) ? ;
+						if (overallDelayProgress >= (1 - warmupTimeRatio))
+						{
+							playAlongProgress = overallDelayProgress - (1 - warmupTimeRatio);
+							playAlongProgress /= warmupTimeRatio;
+						}
+						else
+							playAlongProgress = 0;
+						if (timeNow - replayState.lastNotePlayTime > delayTime - warmupTime)
+						{
+							// Next event doesnt have to be a Note...
+							playAlongNote = ((replayState.progress < currentRecording.data.size()) ? Sounds::Key2Note((Key)currentRecording.data[replayState.progress + delaysNum].value) : (Note)-1);
+						}
+						else
+							playAlongNote = (Note)-1;
+						//printf("warmuptime is: %f. time left %f\n", warmupTime, playAlongProgress);
+						if ((playAlongProgress >= 1 && !replayState.waitForInput) || (replayState.wasInputNotePressed && replayState.waitForInput))
+						{
+							replayState.progress += delaysNum;
+							if ((currentRecording.data[replayState.progress].type == RecEv_Key && replayState.progress == 0))
+							{
+								replayState.progress++;
+								replayState.lastNotePlayTime = timeNow;
+							}
+							replayState.wasInputNotePressed = false;
+						}
+						break;
+					}
+
+					if (replayState.progress > currentRecording.data.size() - 1)
+					{
+						replayState.lastNotePlayTime = -1;
+						replayState.progress = 0;
+						replayState.isPlayingAlong = false;
+					}
+				}
+			}
 
 			for (int i = 0; i <= 11; i++)
 			{
@@ -169,7 +270,9 @@ int OnGui()
 
 				bool isEnabled = !currentSettings.useScale || (std::find(currentNoteSignature, currentNoteSignature + 7, keypadIdx) != currentNoteSignature + 7);
 
-				if(isEnabled)
+				bool isPlayAlongNote = playAlongNote == (Note)keypadIdx;
+
+				if (isEnabled)
 					for (int x = 0; x < 7; x++)
 					{
 						Note note = Sounds::Key2Note(currentKeySignature[x]);
@@ -181,16 +284,26 @@ int OnGui()
 					}
 
 				const char* keyName = Sounds::GetKeyName((isEnabled && currentSettings.useScale) ? currentKey : Sounds::Note2Key((Note)keypadIdx));
-				char spaceBuffer[5]{'\0'};
+				char spaceBuffer[5]{ '\0' };
 				if (keypadIdx != 11)
-				memset(spaceBuffer, ' ', min(strlen(keyName)+1, 5));
-				char buffer[64]{ '\0'};
+					memset(spaceBuffer, ' ', min(strlen(keyName) + 1, 5));
+
+				char buffer[64]{ '\0' };
 				sprintf_s(buffer, "%s%s\n(%s)###KeyPad%i", spaceBuffer, keypadKeys[keypadIdx], keyName, keypadIdx);
 
+				if (isPlayAlongNote)
+				{
+								ImGui::PushStyleColor(ImGuiCol_Button, ImLerp(style.Colors[ImGuiCol_Button], (ImVec4)ImColor::HSV(.2f, 1.f, 1.f), playAlongProgress));
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImLerp(style.Colors[ImGuiCol_ButtonHovered], (ImVec4)ImColor::HSV(.2f, 1.f, 0.92f), playAlongProgress));
+						ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImLerp(style.Colors[ImGuiCol_ButtonActive], (ImVec4)ImColor::HSV(.2f, 1.f, 0.85f), playAlongProgress));
+					//ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(.2f, playAlongProgress, 0.85f));
+					//ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(.2f, playAlongProgress, 0.92f));
+					//ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(.2f, playAlongProgress, 1.f));
+				}
 
-				if(!isEnabled)
+				if (!isEnabled)
 					ImGui::PushStyleVar(ImGuiStyleVar_Alpha, style.Alpha * style.DisabledAlpha);
-				if (ImGui::Button(buffer, { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(intecom2VKeypad[keypadIdx], false))
+				if (ImGui::Button(buffer, { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(intecom2VKeypad[keypadIdx], false) || (isPlayAlongNote && !replayState.waitForInput && playAlongProgress >= 1))
 				{
 					if (i == 0)
 					{
@@ -200,32 +313,42 @@ int OnGui()
 					else
 						Sounds::PlaySound((Note)keypadIdx);
 
-					if (currentSettings.isRecording && !currentSettings.isRecordingPaused)
-					{
-						auto notePlayTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-						if (currentRecording.data.size() > 0)
-							currentRecording.data.push_back({ RecEv_Delay, currentSettings.useStaticDelay ? currentSettings.delay : (int)(notePlayTime - currentRecording.lastKeyTime)});
-						else
-							currentRecording.data.push_back({ RecEv_Delay, 0 });
 
-						currentRecording.lastKeyTime = notePlayTime;
-
-						currentRecording.data.push_back({ RecEv_Key, (isEnabled && currentSettings.useScale) ? currentKey : Sounds::Note2Key((Note)keypadIdx) });
-					}
-					else if(!currentSettings.isRecordingPaused)
+					if (isPlayAlongNote)
+						replayState.wasInputNotePressed = true;
+					else
 					{
-						if (currentRecording.data.size() > 0 && currentRecording.selectedEvent >= 0)
+						if (currentSettings.isRecording && !currentSettings.isRecordingPaused)
 						{
-							currentRecording.data[currentRecording.selectedEvent].value = currentKey;
+							auto notePlayTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+							if (currentRecording.data.size() > 0)
+								currentRecording.data.push_back({ RecEv_Delay, currentSettings.useStaticDelay ? currentSettings.delay : (int)(notePlayTime - currentRecording.lastKeyTime) });
+							else
+								currentRecording.data.push_back({ RecEv_Delay, 0 });
+
+							currentRecording.lastKeyTime = notePlayTime;
+
+							currentRecording.data.push_back({ RecEv_Key, (isEnabled && currentSettings.useScale) ? currentKey : Sounds::Note2Key((Note)keypadIdx) });
+
+							wasNewRecEntryAdded = true;
+						}
+						else if (!currentSettings.isRecordingPaused)
+						{
+							if (currentRecording.data.size() > 0 && currentRecording.selectedEvent >= 0)
+							{
+								currentRecording.data[currentRecording.selectedEvent].value = currentKey;
+							}
 						}
 					}
 				}
 				if (!isEnabled)
 					ImGui::PopStyleVar();
 
-				if ((i+1) % 4 == 0 && i < 10)
-					//ImGui::Text("Space");
-					ImGui::TableSetColumnIndex((i)/4+1);
+				if (isPlayAlongNote)
+					ImGui::PopStyleColor(3);
+
+				if ((i + 1) % 4 == 0 && i < 10)
+					ImGui::TableSetColumnIndex((i) / 4 + 1);
 			}
 
 			//if(ImGui::Button("   1\n(A#)###KeyPad1", { keypadAvail.x/3,keypadAvail.y/4 }) || (ImGui::IsKeyPressed(ImGuiKey_NumLock, false) && !_wasNumLockRevertedLastFrame))
@@ -310,23 +433,23 @@ int OnGui()
 		ImGui::HeaderTitle("Sound");
 
 		ImVec2 scaleAvail = { settingsAvail.x - style.ItemSpacing.x * 2 , settingsAvail.y };
-		ImGui::PushItemWidth((settingsAvail.x - style.ItemSpacing.x)/2 - ImGui::GetFrameHeight());
+		ImGui::PushItemWidth((settingsAvail.x - style.ItemSpacing.x) / 2 - ImGui::GetFrameHeight());
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { style.ItemSpacing.x, 0 });
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 0, style.FramePadding.y });
 
 		ImGui::BeginDisabled(!currentSettings.useScale);
 		ImGui::Dummy({ ImGui::GetFrameHeight() , 0 }); ImGui::SameLine();
-		ImGui::LabelText("###NoteLabel","Note"); ImGui::SameLine(); ImGui::LabelText("###KeyLabel","Key");
+		ImGui::LabelText("###NoteLabel", "Note"); ImGui::SameLine(); ImGui::LabelText("###KeyLabel", "Key");
 		ImGui::EndDisabled();
 		ImGui::PopStyleVar();
 
 		ImGui::Checkbox("###ScaleCB", &currentSettings.useScale); ImGui::SameLine();
 		ImGui::BeginDisabled(!currentSettings.useScale);
-		if(ImGui::Combo("###NoteCombo", (int*)&currentSettings.selectedKey, notesList, 21))
+		if (ImGui::Combo("###NoteCombo", (int*)&currentSettings.selectedKey, notesList, 21))
 			RecalculateKeySignature(currentSettings.selectedScale, currentSettings.selectedKey);
 		ImGui::SameLine();
 		ImGui::PopStyleVar();
-		if(ImGui::Combo("###KeyCombo", (int*)&currentSettings.selectedScale, keysList, 2))
+		if (ImGui::Combo("###KeyCombo", (int*)&currentSettings.selectedScale, keysList, 2))
 			RecalculateKeySignature(currentSettings.selectedScale, currentSettings.selectedKey);
 		ImGui::EndDisabled();
 
@@ -345,8 +468,13 @@ int OnGui()
 		//ImGui::Checkbox("###Use Saw WaveCB", &currentSettings.useSawWave);
 		ImGui::Spacing();
 
+
+
 		// Recording
 		ImGui::HeaderTitle("Recording");
+
+		ImGui::BeginGroup();
+		ImGui::BeginDisabled(replayState.isPlaying || replayState.isPlayingAlong);
 
 		ImGui::Checkbox("Static Delay", &currentSettings.useStaticDelay);
 		ImGui::SameLine();
@@ -355,7 +483,7 @@ int OnGui()
 		ImGui::DragInt("###DelayDrag", &currentSettings.delay, 1, 1, 1000, "%dms");
 		ImGui::EndDisabled();
 
-		if (ImGui::Button(currentSettings.isRecording ? "Stop" : "Record", {(settingsAvail.x - style.ItemSpacing.x)/2, 0}))
+		if (ImGui::Button(currentSettings.isRecording ? "Stop" : "Record", { (settingsAvail.x - style.ItemSpacing.x) / 2, 0 }))
 		{
 			currentSettings.isRecording = !currentSettings.isRecording;
 			currentSettings.isRecordingPaused = false;
@@ -371,7 +499,7 @@ int OnGui()
 		ImGui::EndDisabled();
 
 		ImGui::BeginDisabled(currentRecording.data.size() <= 0);
-		if (ImGui::Button("Save", { (settingsAvail.x - style.ItemSpacing.x) / 2, 0}))
+		if (ImGui::Button("Save", { (settingsAvail.x - style.ItemSpacing.x) / 2, 0 }))
 		{
 			SaveCurrentRecording();
 		}
@@ -381,7 +509,7 @@ int OnGui()
 		{
 			OpenRecording();
 		}
-		if (ImGui::Button("Clear", { settingsAvail.x , 0}))
+		if (ImGui::Button("Clear", { settingsAvail.x , 0 }))
 		{
 			ImGui::OpenPopup("Are you sure?##ClearRecordingPopup");
 		}
@@ -393,7 +521,7 @@ int OnGui()
 
 			auto avail = ImGui::GetContentRegionAvail().x - style.ItemSpacing.x;
 
-			if (ImGui::Button("Clear", { avail / 2, 0}))
+			if (ImGui::Button("Clear", { avail / 2, 0 }))
 			{
 				currentRecording.data.clear();
 				ImGui::CloseCurrentPopup();
@@ -405,41 +533,52 @@ int OnGui()
 			}
 			ImGui::EndPopup();
 		}
+		ImGui::EndDisabled();
+		ImGui::EndGroup();
+		if (ImGui::IsItemHovered() && (replayState.isPlaying || replayState.isPlayingAlong))
+			ImGui::SetTooltip("Stop the replay first");
 	}
 	ImGui::EndGroup();
+
 	ImGui::PopItemWidth();
 
-	if (ImGui::BeginChild("Replay", { 0, 140 }, true))
+	if (ImGui::BeginChild("Replay", { 0, 200 }, true))
 	{
+		ImGui::BeginDisabled(currentSettings.isRecording);
 		ImVec2 replayAvail = ImGui::GetContentRegionAvail();
 
 		float controlButtonWidth = (replayAvail.x - style.ItemSpacing.x) / 2;
 
 		ImGui::BeginDisabled(currentRecording.data.size() <= 0);
 
-		if (ImGui::Button(replayState.isPlaying ? "Stop" : "Play", { controlButtonWidth, 0 }))
+		bool wasStopClicked = false;
+
+		if (ImGui::Button(replayState.isPlaying ? "Stop##PlayReplay" : "Play##PlayReplay", { controlButtonWidth, 0 }))
 		{
 			replayState.isPlaying = !replayState.isPlaying;
 			if (replayState.isPlaying)
-				Sounds::PlayReplay(currentRecording, &replayState.isPlaying, &replayState.isPaused, &replayState.progress);
+				Sounds::PlayReplay(currentRecording, &replayState.isPlaying, &replayState.isPaused, &replayState.progress, &replayState.playbackSpeedPercent);
 			else
 				replayState.progress = 0;
 
 			replayState.isPaused = false;
+			wasStopClicked = true;
 		}
 		ImGui::EndDisabled();
 		ImGui::SameLine();
 		ImGui::BeginDisabled(!replayState.isPlaying);
-		if (ImGui::Button(replayState.isPaused ? "Resume" : "Pause", { controlButtonWidth, 0 }))
+		if (ImGui::Button(replayState.isPaused ? "Resume##PlayReplay" : "Pause##PlayReplay", { controlButtonWidth, 0 }))
 		{
 			replayState.isPaused = !replayState.isPaused;
 			if (!replayState.isPaused)
-				Sounds::PlayReplay(currentRecording, &replayState.isPlaying, &replayState.isPaused, &replayState.progress);
+				Sounds::PlayReplay(currentRecording, &replayState.isPlaying, &replayState.isPaused, &replayState.progress, &replayState.playbackSpeedPercent);
 		}
 		ImGui::EndDisabled();
 
+		static bool wasLastItemVisible = false;
+
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.9f, 0.9f, 0.9f, 1.00f));
-		if (ImGui::BeginChild("ReplayNodes", { replayAvail.x, ImGui::GetFrameHeight() + style.ScrollbarSize}, false, ImGuiWindowFlags_AlwaysHorizontalScrollbar))
+		if (ImGui::BeginChild("ReplayNodes", { replayAvail.x, ImGui::GetFrameHeight() + style.ScrollbarSize }, false, ImGuiWindowFlags_AlwaysHorizontalScrollbar))
 		{
 			//ImGui::Dummy({ 5, ImGui::GetFrameHeight() });
 			//ImGui::SameLine();
@@ -453,6 +592,7 @@ int OnGui()
 				sprintf_s(popupName, "Delete this item?##ItemDel%lld", i);
 				bool is_selected = _currentRecCopy.selectedEvent == i;
 				auto item = _currentRecCopy.data[i];
+
 				switch (_currentRecCopy.data[i].type)
 				{
 				case RecEv_Key:
@@ -467,15 +607,33 @@ int OnGui()
 					{
 						currentRecording.selectedEvent = -1;
 					}
+
+					// Scroll Only when playing
+					if (((replayState.isPlaying && !replayState.isPaused || replayState.isPlayingAlong)) && replayState.progress == (i + replayState.isPlaying) && replayState.autoScroll)
+					{
+						//ImGui::ScrollToItem();
+						ImGui::SetScrollHereX(0);
+					}
+
+					// Set progress when scrolling (only when not playing)
+					if (replayState.autoScroll && (!(replayState.isPlaying && !replayState.isPaused) && !replayState.isPlayingAlong) && !wasLastItemVisible && ImGui::IsItemVisible())
+					{
+						replayState.progress = i;
+					}
+
+					wasLastItemVisible = ImGui::IsItemVisible();
 					break;
 				case RecEv_Delay:
 					ImGui::DrawRecEvDelay(currentRecording.data[i], i, _currentRecCopy.moveMode);
-					if (ImGui::IsItemClicked(0))
+					if (ImGui::IsItemClicked(0.1f))
 						currentRecording.selectedEvent = i;
 					break;
 				default:
 					break;
 				}
+
+				if (wasStopClicked && i == 0)
+					ImGui::SetScrollHereX(0);
 
 				if (ImGui::IsItemActive() && !ImGui::IsItemHovered() && currentRecording.moveMode)
 				{
@@ -511,20 +669,55 @@ int OnGui()
 			}
 			ImGui::SameLine();
 			ImGui::Dummy({ 0,10 });
+			if(currentSettings.isRecording && !currentSettings.isRecordingPaused && wasNewRecEntryAdded && replayState.autoScroll)
+				ImGui::SetScrollHereX(0);
 		}
 		ImGui::PopStyleColor();
 		ImGui::EndChild();
 
 		ImGui::Checkbox("Move Mode", &currentRecording.moveMode);
 		ImGui::SameLine();
+		if (ImGui::Checkbox("Auto Scroll", &replayState.autoScroll) && (!(replayState.isPlaying && !replayState.isPaused) && !replayState.isPlayingAlong))
+			replayState.progress = 0;
+		ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize("Insert Delay").x - ImGui::CalcTextSize("Insert Note").x - style.FramePadding.x * 4 - style.WindowPadding.x - style.ItemSpacing.x);
+		ImGui::BeginDisabled(currentRecording.data.size() <= 0);
+		ImGui::BeginGroup();
 		if (ImGui::Button("Insert Delay", { 0,0 }))
 		{
-			currentRecording.data.insert(currentRecording.data.begin() + ((currentRecording.selectedEvent >= 0) ? currentRecording.selectedEvent : 0) + 1, { RecEv_Delay , 200});
+			currentRecording.data.insert(currentRecording.data.begin() + ((currentRecording.selectedEvent >= 0) ? currentRecording.selectedEvent : currentRecording.data.size() - 1) + 1, { RecEv_Delay , currentSettings.useStaticDelay ? currentSettings.delay : 200 });
 		}
+		ImGui::SameLine();
+		if (ImGui::Button("Insert Note", { 0,0 }))
+		{
+			currentRecording.data.insert(currentRecording.data.begin() + ((currentRecording.selectedEvent >= 0) ? currentRecording.selectedEvent : currentRecording.data.size() - 1) + 1, { RecEv_Key , currentSettings.useScale ? currentKeySignature[0] : 0});
+		}
+		ImGui::EndGroup();
+		ImGui::EndDisabled();
+
+
+		ImGui::HeaderTitle("Play Along");
+
+		ImGui::BeginDisabled(currentRecording.data.size() <= 0);
+		if (ImGui::Button(replayState.isPlayingAlong ? "Stop##PlayAlong" : "Play##PlayAlong", { controlButtonWidth, 0 }))
+		{
+			replayState.isPlayingAlong = !replayState.isPlayingAlong;
+			replayState.wasInputNotePressed = false;
+			replayState.lastNotePlayTime = -1;
+			replayState.progress = 0;
+		}
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(controlButtonWidth - ImGui::CalcTextSize("Speed").x);
+		ImGui::SliderInt("Speed", &replayState.playbackSpeedPercent, 1, 300, "%d%%");
+
+		ImGui::Checkbox("Wait for input", &replayState.waitForInput);
+		ImGui::EndDisabled();
+		ImGui::EndDisabled();
 	}
 	ImGui::EndChild();
+	if (ImGui::IsItemHovered() && currentSettings.isRecording)
+		ImGui::SetTooltip("Stop the recording first");
 
-	ImGui::PlotLines("AudioFunc", Sounds::bufferMem, 512 / (*Sounds::pBaseOctave + 1), 0, 0, 1.f, -1.f, {ImGui::GetContentRegionAvail().x, -1 });
+	ImGui::PlotLines("AudioFunc", Sounds::bufferMem, 512 / (*Sounds::pBaseOctave + 1), 0, 0, 1.f, -1.f, { ImGui::GetContentRegionAvail().x, -1 });
 
 	if (_wasNumLockPressedLastFrame && GetForegroundWindow() == hwnd)
 	{

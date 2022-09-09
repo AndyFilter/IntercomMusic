@@ -110,4 +110,11 @@ struct ReplayState
 	bool isPlaying = false;
 	bool isPaused = false;
 	int progress = -1;
+
+	bool isPlayingAlong = false;
+	bool waitForInput = false;
+	bool wasInputNotePressed = false;
+	bool autoScroll = true;
+	int playbackSpeedPercent = 100;
+	int64_t lastNotePlayTime = -1;
 };

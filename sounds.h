@@ -13,7 +13,7 @@ namespace Sounds
 	inline bool* pUseSawWave = nullptr;
 	void PlaySound(Note, DWORD dwMillis = 50, FunctionType funcType = (FunctionType)(*pUseSawWave), int octave = *pBaseOctave);
 
-	void PlayReplay(Recording& rec, bool* is_playing, bool* is_paused, int* progress);
+	void PlayReplay(Recording& rec, bool* is_playing, bool* is_paused, int* progress, int* speed);
 
 	const char* GetKeyName(Key key);
 	Note Key2Note(Key key);

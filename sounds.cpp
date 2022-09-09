@@ -326,11 +326,14 @@ TryNewSignature:
             // If is wrong
             if (((isHigher || isHigher2) && !isSharp) || ((isLower || isLower2) && isSharp))
             {
-                if (retries < 2)
+                if (retries < 1)
                 {
-                    if (!isBaseKeySharp)
+                    //if (!isBaseKeySharp)
+                    //    outSignature[0] = (Key)abs((outSignature[0] + (isBaseKeySharp ? 1 : -1)) % 21);
+                    //else
                         outSignature[0] = (Key)abs((outSignature[0] + (isBaseKeySharp ? 1 : -1)) % 21);
                     isBaseKeySharp = !isBaseKeySharp;
+
                 }
                 else
                     return;
@@ -448,7 +451,7 @@ void Sounds::PlaySound(Note note, DWORD dwMillis, FunctionType funcType, int oct
 
 }
 
-void ReplayThread(Recording *rec, bool* is_playing, bool* is_paused, int* progress)
+void ReplayThread(Recording *rec, bool* is_playing, bool* is_paused, int* progress, int* speed)
 {
     for (*progress = (*progress) > 0 ? *progress : 0; *progress < rec->data.size(); (*progress)++)
     {
@@ -463,7 +466,7 @@ void ReplayThread(Recording *rec, bool* is_playing, bool* is_paused, int* progre
             break;
         case RecEv_Delay:
             //auto start = std::chrono::high_resolution_clock::now();
-            std::this_thread::sleep_for(std::chrono::milliseconds(max(rec->data[*progress].value-8, 0)));
+            std::this_thread::sleep_for((std::chrono::milliseconds(max(rec->data[*progress].value-8, 0)) * 100) / *speed);
             //Sleep(rec->data[*progress].value);
             //printf("%i delay took %lld\n", rec->data[*progress].value, std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count());
             break;
@@ -473,8 +476,8 @@ void ReplayThread(Recording *rec, bool* is_playing, bool* is_paused, int* progre
     *progress = 0;
 }
 
-void Sounds::PlayReplay(Recording& rec, bool* is_playing, bool* is_paused, int* progress)
+void Sounds::PlayReplay(Recording& rec, bool* is_playing, bool* is_paused, int* progress, int* speed)
 {
-    replayThread = std::thread(ReplayThread, &rec, is_playing, is_paused, progress);
+    replayThread = std::thread(ReplayThread, &rec, is_playing, is_paused, progress, speed);
     replayThread.detach();
 }
