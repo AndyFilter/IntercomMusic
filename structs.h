@@ -118,3 +118,11 @@ struct ReplayState
 	int playbackSpeedPercent = 100;
 	int64_t lastNotePlayTime = -1;
 };
+
+struct Score
+{
+	int badNotes = 0;
+	int combo = 0;
+	int64_t points = 0;
+	float accuracy = 0.0f;
+};

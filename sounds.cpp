@@ -435,7 +435,7 @@ void Sounds::PlaySound(Note note, DWORD dwMillis, FunctionType funcType, int oct
 
     Sounds::AudioBuffer->SourceVoice->SetVolume(*Sounds::pVolume);
 
-	printf("playing freq: %f, real Note: %i\n", frequency, realNote);
+	printf("playing freq: %f, real Note: %i (%s)\n", frequency, realNote, GetKeyName(Note2Key(note)));
 
     CreateFunction(AudioBuffer, frequency, funcType);
 

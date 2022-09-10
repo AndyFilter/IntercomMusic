@@ -66,6 +66,7 @@ namespace ImGui
 
         ImGui::PushStyleColor(ImGuiCol_Text, { 0,0,0,0.95f });
 
+        //ImVec4 baseKeyColor = ImVec4(0.7f, 1.f, 0.7f, 1.f);
         ImVec4 baseKeyColor = ImVec4(0.7f, 1.f, 0.7f, 1.f);
         PushStyleColor(ImGuiCol_Header, baseKeyColor);
         baseKeyColor *= 0.85f;
@@ -105,6 +106,7 @@ namespace ImGui
 
         //ImVec4 baseDelayColor = ImVec4(1.f, 0.6f, 0.6f, 1.f);
         ImVec4 baseDelayColor = ImVec4(1.f, 0.8f, 0.8f, 1.f);
+        //ImVec4 baseDelayColor = ImVec4(0.47f, 0.74f, 0.93f, 1.f);
 
         auto returnVal = false;
         

@@ -5,7 +5,7 @@
 #include <iostream>
 
 #include "gui.h"
-//#include "resource.h"
+#include "resource.h"
 #include "Fonts.h"
 
 using namespace GUI;
@@ -22,7 +22,11 @@ void CreateRenderTarget();
 void CleanupRenderTarget();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-static int windowX = 500, windowY = 740;
+#ifdef _DEBUG
+const int windowX = 500, windowY = 740;
+#else
+const int windowX = 500, windowY = 600;
+#endif
 
 float defaultFontSize = 16.0f;
 
@@ -39,10 +43,10 @@ HWND GUI::Setup(int (*OnGuiFunc)())
 	// Create application window
 	//ImGui_ImplWin32_EnableDpiAwareness();
 	wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, _T("Intercom Music"), NULL };
-	//wc.hIcon = LoadIcon(wc.hInstance, MAKEINTRESOURCE(IDI_ICON1));
-	//wc.hIconSm = LoadIcon(wc.hInstance, MAKEINTRESOURCE(IDI_ICON1));
+	wc.hIcon = LoadIcon(wc.hInstance, MAKEINTRESOURCE(IDI_ICON1));
+	wc.hIconSm = LoadIcon(wc.hInstance, MAKEINTRESOURCE(IDI_ICON1));
 	::RegisterClassEx(&wc);
-	hwnd = ::CreateWindow(wc.lpszClassName, _T("Intercom Music"), (WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX), 100, 100, windowX, windowY, NULL, NULL, wc.hInstance, NULL);
+	hwnd = ::CreateWindow(wc.lpszClassName, _T("Intercom Music"), (WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX), 100, 100, windowX, windowY, NULL, NULL, wc.hInstance, NULL);
 
 	// Initialize Direct3D
 	if (!CreateDeviceD3D(hwnd))
