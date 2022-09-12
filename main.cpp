@@ -22,9 +22,9 @@ const bool is_debug = false;
 
 HWND hwnd;
 
-const int max_note_warmup_time = 600;
+const int max_note_warmup_time = 300;
 const ImVec4 playAlongButtonColor = (ImVec4)ImColor(0.5f, 0.9f, 0.4f);
-const float warmupTimeRatio = 0.9f;
+const float warmupTimeRatio = 1.f;
 
 const int max_note_score = 500;
 
@@ -38,6 +38,7 @@ Settings currentSettings;
 Recording currentRecording;
 ReplayState replayState;
 Score currentScore;
+NoteStats* currentGameNotesStats;
 
 const char* notesList[21]{};
 const char* keysList[2]{ "Major", "Minor" };
@@ -71,6 +72,7 @@ int64_t millis()
 
 int GetScore(int delay)
 {
+	delay = max_note_score - delay;
 	if (delay > max_note_score - 15)
 		return max_note_score;
 
@@ -192,18 +194,212 @@ int OnGui()
 			ImGui::PushStyleColor(ImGuiCol_Text, { 0,0,0,0.95f });
 
 			Note playAlongNote = (Note)-1;
-			static Note lastPlayAlongNote {(Note)-1};
-			static int lastNoteDelayTime = -1;
-			static int64_t lastNotePlayTime{ 0 };
+			static Note lastPlayAlongNote{ (Note)-1 };
+			//static int lastNoteDelayTime = -1;
+			//static int64_t lastNotePlayTime{ 0 };
 			float playAlongProgress = 0;
-			static int delaysNum {1};
-			static float delayTime = 0;
+			//static int delaysNum{ 1 };
+			//static float delayTime = 0;
 			bool playedCurrentNote = false;
+			static int noteIdx = 0;
+			static int notesCount = 0;
+			static int hangingDelay {0};
+
+			static int64_t awaitStart = 0;
+
+			static bool wasPlayingAlongLastFrame = false;
 
 			if (replayState.isPlayingAlong)
 			{
 				auto timeNow = millis();
 
+				if (!wasPlayingAlongLastFrame)
+				{
+					noteIdx = 0;
+					awaitStart = 0;
+					hangingDelay = 0;
+
+					notesCount = std::count_if(currentRecording.data.begin(), currentRecording.data.end(), [](RecordingEvent ev) { return ev.type == RecEv_Key; });
+					currentGameNotesStats = new NoteStats[notesCount]; // Remember to delete[] the array after playing
+					ZeroMemory(&currentScore, sizeof(currentScore));
+
+					int delaySum = 1000;
+					int delaysNum = 0;
+
+					for (size_t i = 0; i < currentRecording.data.size(); i++)
+					{
+						if (currentRecording.data[i].type == RecEv_Delay)
+						{
+							delaySum += currentRecording.data[i].value;
+							delaysNum++;
+						}
+						else
+						{
+							currentGameNotesStats[noteIdx].delayTime = (delaySum * 100.f / replayState.playbackSpeedPercent);
+							currentGameNotesStats[noteIdx].delayNum = delaysNum;
+
+							auto warmupTime = (float)min((delaySum * warmupTimeRatio), max_note_warmup_time);
+							currentGameNotesStats[noteIdx].warmupTime = warmupTime;
+							currentGameNotesStats[noteIdx].actualWarmupRatio = warmupTime / delaySum;
+							currentGameNotesStats[noteIdx].key = (Key)currentRecording.data[i].value;
+
+							currentGameNotesStats[noteIdx].playTime = noteIdx == 0 ? timeNow : (currentGameNotesStats[noteIdx-1].playTime + (int64_t)currentGameNotesStats[noteIdx - 1].delayTime);
+
+							delaySum = delaysNum = 0;
+
+							noteIdx++;
+						}
+					}
+					noteIdx = 0;
+				}
+
+				NoteStats& currentStats = currentGameNotesStats[noteIdx];
+
+				float overallDelayProgress = max(min((timeNow - currentStats.playTime) / currentStats.delayTime, 1), 0);
+				if (overallDelayProgress >= (1 - currentStats.actualWarmupRatio))
+				{
+					playAlongProgress = overallDelayProgress - (1 - currentStats.actualWarmupRatio);
+					playAlongProgress /= currentStats.actualWarmupRatio;
+				}
+				else
+					playAlongProgress = 0;
+
+				if (timeNow - currentStats.playTime > currentStats.delayNum - currentStats.warmupTime || replayState.waitForInput && hangingDelay <= 0)
+				{
+					// Next event doesnt have to be a Note...
+					playAlongNote = ((replayState.progress < currentRecording.data.size()-1) ? Sounds::Key2Note((Key)currentRecording.data[replayState.progress + currentStats.delayNum].value) : (Note)-1);
+				}
+				else
+					playAlongNote = (Note)-1;
+
+				if (((playAlongProgress >= 0.9999f && !replayState.waitForInput) || (currentStats.wasClicked && replayState.waitForInput)) && (hangingDelay <= 0 && replayState.progress < currentRecording.data.size()))
+				{
+					if (currentRecording.data[replayState.progress].type == RecEv_Key)
+					{
+						noteIdx++;
+						if (noteIdx < notesCount)
+						{
+							printf("Set playtime for note %i\n", noteIdx);
+							//currentGameNotesStats[noteIdx].playTime = timeNow;
+						}
+						else if (replayState.progress < currentRecording.data.size() && std::count_if(currentRecording.data.begin() + replayState.progress + 1, currentRecording.data.end(), [](RecordingEvent ev) { return ev.type == RecEv_Key; }) <= 0)
+						{
+							noteIdx--;
+							for (size_t i = replayState.progress+1; i < currentRecording.data.size(); i++)
+							{
+								hangingDelay += currentRecording.data[i].value;
+								replayState.progress++;
+							}
+							awaitStart = millis();
+							//printf("hanging delay: %i\n", hangingDelay);
+						}
+					}
+					replayState.progress += currentStats.delayNum;
+					//if ((currentRecording.data[replayState.progress].type == RecEv_Key && replayState.progress == 0))
+					//{
+					//	replayState.progress++;
+					//	replayState.lastNotePlayTime = timeNow;
+					//}
+					replayState.wasInputNotePressed = false;
+				}
+
+				//switch (currentRecording.data[replayState.progress].type)
+				//{
+				//case RecEv_Key:
+				//	if (replayState.progress > 0 || (replayState.progress == 0 && playAlongProgress >= 0.9999f))
+				//	{
+				//		lastPlayAlongNote = Sounds::Key2Note((Key)currentRecording.data[replayState.progress].value);
+				//		playAlongNote = Sounds::Key2Note((Key)currentRecording.data[replayState.progress].value);
+				//		replayState.lastNotePlayTime = timeNow;
+				//		replayState.progress++;
+				//		playedCurrentNote = false;
+				//		break;
+				//	}
+				//	// Fallthrough on porpouse.
+				//case RecEv_Delay:
+				//	// This part can only run when progress changes
+				//	if (replayState.progress == currentRecording.data.size() - 1 && currentRecording.data[replayState.progress].type == RecEv_Delay)
+				//	{
+				//		replayState.progress++;
+				//		break;
+				//	}
+				//	if (currentRecording.data[replayState.progress].type == RecEv_Key && replayState.progress == 0)
+				//		delaysNum = -1;
+				//	else
+				//		delaysNum = 1;
+				//	delayTime = (float)(replayState.progress == 0) ? 1000 : currentRecording.data[replayState.progress].value;
+				//	if (currentRecording.data[replayState.progress + 1].type == RecEv_Delay)
+				//	{
+				//		for (size_t i = replayState.progress + 1; i < currentRecording.data.size(); i++)
+				//		{
+				//			if (currentRecording.data[i].type == RecEv_Delay)
+				//				delayTime += currentRecording.data[i].value;
+				//			else
+				//				break;
+				//			delaysNum++;
+				//		}
+				//	}
+				//	delayTime = (delayTime * 100 / replayState.playbackSpeedPercent);
+				//	auto warmupTime = (float)min((delayTime * warmupTimeRatio), max_note_warmup_time);
+				//	float overallDelayProgress = max(min((timeNow - replayState.lastNotePlayTime) / delayTime, 1), 0);
+				//	//playAlongProgress *= (playAlongProgress > (1 - warmupTimeRatio)) ? ;
+				//	auto currentRatio = warmupTime / delayTime;
+				//	if (overallDelayProgress >= (1 - currentRatio))
+				//	{
+				//		playAlongProgress = overallDelayProgress - (1 - currentRatio);
+				//		playAlongProgress /= currentRatio;
+				//	}
+				//	else
+				//		playAlongProgress = 0;
+				//	if (timeNow - replayState.lastNotePlayTime > delayTime - warmupTime || replayState.waitForInput)
+				//	{
+				//		// Next event doesnt have to be a Note...
+				//		playAlongNote = ((replayState.progress < currentRecording.data.size()) ? Sounds::Key2Note((Key)currentRecording.data[replayState.progress + delaysNum].value) : (Note)-1);
+				//	}
+				//	else
+				//		playAlongNote = (Note)-1;
+				//	//printf("warmuptime is: %f. time left %f\n", warmupTime, playAlongProgress);
+				//	if ((playAlongProgress >= 0.9999f && !replayState.waitForInput) || (replayState.wasInputNotePressed && replayState.waitForInput))
+				//	{
+				//		replayState.progress += delaysNum;
+				//		if ((currentRecording.data[replayState.progress].type == RecEv_Key && replayState.progress == 0))
+				//		{
+				//			replayState.progress++;
+				//			replayState.lastNotePlayTime = timeNow;
+				//		}
+				//		replayState.wasInputNotePressed = false;
+				//	}
+				//	break;
+				//}
+
+				//if ((timeNow - currentStats.playTime) - currentStats.delayTime - hangingDelay > 0)
+				//	hangingDelay = 0;
+
+				if (replayState.progress >= currentRecording.data.size() && (((timeNow - currentStats.playTime) - currentStats.delayTime) > (max_note_score + hangingDelay)))
+				{
+					currentScore.accuracy = (float)currentScore.points / (notesCount * max_note_score);
+					printf("Score: %lld, Misses: %i, Acc: %f%%\n", currentScore.points, currentScore.badNotes, currentScore.accuracy * 100);
+
+					for (int i = 0; i < notesCount; i++)
+					{
+						if(!currentGameNotesStats[i].wasClicked)
+							currentScore.missedNotes++;
+					}
+
+					replayState.lastNotePlayTime = -1;
+					replayState.progress = 0;
+					replayState.isPlayingAlong = false;
+					noteIdx = 0;
+					awaitStart = 0;
+					hangingDelay = 0;
+					delete[] currentGameNotesStats;
+
+					ImGui::OpenPopup("Score##ScoreEndPopup");
+				}
+
+				wasPlayingAlongLastFrame = true;
+
+				/*
 				if (replayState.lastNotePlayTime < 0)
 					replayState.lastNotePlayTime = timeNow;
 				else
@@ -299,9 +495,37 @@ int OnGui()
 						replayState.lastNotePlayTime = -1;
 						replayState.progress = 0;
 						replayState.isPlayingAlong = false;
+
+						delete[] currentGameNotesStats;
 					}
 				}
+				*/
 			}
+			else
+				wasPlayingAlongLastFrame = false;
+
+				if (ImGui::BeginPopupModal("Score##ScoreEndPopup", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+				{
+					const int width = 260;
+					if (ImGui::BeginTable("ScoreTable", 3, ImGuiTableFlags_SizingStretchSame))
+					{
+						ImGui::TableNextRow();
+						ImGui::TableNextColumn();
+						ImGui::Text("Score: %i", currentScore.points);
+						ImGui::TableNextColumn();
+						ImGui::Text("Notes hit: %i/%i", notesCount - currentScore.missedNotes, notesCount);
+						ImGui::TableNextColumn();
+						ImGui::Text("Bad notes: %i", currentScore.badNotes);
+						ImGui::EndTable();
+					}
+					ImGui::Text("Accuracy: %.2f%%", currentScore.accuracy * 100);
+
+					if (ImGui::Button("Close", { width, 0 }))
+					{
+						ImGui::CloseCurrentPopup();
+					}
+					ImGui::EndPopup();
+				}
 
 			for (int i = 0; i <= 11; i++)
 			{
@@ -311,7 +535,8 @@ int OnGui()
 
 				bool isEnabled = !currentSettings.useScale || (std::find(currentNoteSignature, currentNoteSignature + 7, keypadIdx) != currentNoteSignature + 7);
 
-				bool isPlayAlongNote = playAlongNote == (Note)keypadIdx, isLastPlayAlongNote = lastPlayAlongNote == (keypadIdx);
+				bool isPlayAlongNote = playAlongNote == (Note)keypadIdx;
+				bool isSoonToBePlayedAlong = false;
 
 				if (isEnabled)
 					for (int x = 0; x < 7; x++)
@@ -324,6 +549,8 @@ int OnGui()
 						}
 					}
 
+				auto timeNow = millis();
+
 				const char* keyName = Sounds::GetKeyName((isEnabled && currentSettings.useScale) ? currentKey : Sounds::Note2Key((Note)keypadIdx));
 				char spaceBuffer[5]{ '\0' };
 				if (keypadIdx != 11)
@@ -332,11 +559,38 @@ int OnGui()
 				char buffer[64]{ '\0' };
 				sprintf_s(buffer, "%s%s\n(%s)###KeyPad%i", spaceBuffer, keypadKeys[keypadIdx], keyName, keypadIdx);
 
-				if (isPlayAlongNote)
+				size_t latestNote = 0;
+
+				if (replayState.isPlayingAlong)
 				{
-								ImGui::PushStyleColor(ImGuiCol_Button, ImLerp(style.Colors[ImGuiCol_Button], (ImVec4)ImColor::HSV(.2f, 1.f, 1.f), playAlongProgress * 1.1f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImLerp(style.Colors[ImGuiCol_ButtonHovered], (ImVec4)ImColor::HSV(.2f, 1.f, 0.92f), playAlongProgress * 1.1f));
-						ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImLerp(style.Colors[ImGuiCol_ButtonActive], (ImVec4)ImColor::HSV(.2f, 1.f, 0.85f), playAlongProgress * 1.1f));
+					float noteProgress = 0;
+					for (size_t i = 0; i < notesCount; i++)
+					{
+						NoteStats& curNote = currentGameNotesStats[i];
+						if (curNote.playTime == -1)
+							auto x = 0;
+						//auto timePlayed = curNote.playTime;//(i == 0 ? curNote.playTime : curNote.playTime > 0 ? curNote.playTime : (currentGameNotesStats[i - 1].playTime + (int64_t)currentGameNotesStats[i - 1].delayTime));
+						//auto timeDelta = abs(timeNow - curNote.playTime - curNote.delayTime);
+						auto timeLeft = timeNow - curNote.playTime - curNote.delayTime;
+
+						if (abs(timeLeft) < max_note_warmup_time && Sounds::Key2Note(curNote.key) == (Note)keypadIdx && !curNote.wasClicked)
+						{
+							//auto points = GetScore(timeDelta);
+
+							noteProgress = min(max(timeLeft / max_note_warmup_time, -1), 1) + 1;
+							if(noteProgress < 1)
+								isSoonToBePlayedAlong = true;
+
+							//printf("Note %s (%lld) time left: %f, progress: %f\n", keyName, i, timeNow - curNote.playTime - curNote.delayTime, noteProgress);
+						}
+					}
+
+					if (isSoonToBePlayedAlong)
+					{
+						ImGui::PushStyleColor(ImGuiCol_Button, ImLerp(style.Colors[ImGuiCol_Button], (ImVec4)ImColor::HSV(.2f, 1.f, 1.f), noteProgress * 1.1f));
+						ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImLerp(style.Colors[ImGuiCol_ButtonHovered], (ImVec4)ImColor::HSV(.2f, 1.f, 0.92f), noteProgress * 1.1f));
+						ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImLerp(style.Colors[ImGuiCol_ButtonActive], (ImVec4)ImColor::HSV(.2f, 1.f, 0.85f), noteProgress * 1.1f));
+					}
 					//ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(.2f, playAlongProgress, 0.85f));
 					//ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(.2f, playAlongProgress, 0.92f));
 					//ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(.2f, playAlongProgress, 1.f));
@@ -347,32 +601,53 @@ int OnGui()
 
 				bool button = ImGui::Button(buffer, { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(intecom2VKeypad[keypadIdx], false);
 
-				if (((button && !replayState.isPlayingAlong) || (button && replayState.isPlayingAlong && !playedCurrentNote)) || (replayState.isPlayingAlong && (isPlayAlongNote && !playedCurrentNote) && !replayState.waitForInput && playAlongProgress >= 0.9999f))
+				if (button || (replayState.isPlayingAlong && (isPlayAlongNote) && !replayState.waitForInput && playAlongProgress >= 0.9999f))
 				{
-					if (i == 0)
+					if ( ( (button && !replayState.isPlayingAlong) || (replayState.isPlayingAlong && !currentGameNotesStats[noteIdx].wasPlayed) ) )
 					{
-						if (!_wasNumLockRevertedLastFrame)
+						if (i == 0)
+						{
+							if (!_wasNumLockRevertedLastFrame)
+								Sounds::PlaySound((Note)keypadIdx);
+						}
+						else
 							Sounds::PlaySound((Note)keypadIdx);
 					}
-					else
-						Sounds::PlaySound((Note)keypadIdx);
 
 
-					if (isPlayAlongNote || isLastPlayAlongNote)
+					if (replayState.isPlayingAlong)
 					{
 						if (isPlayAlongNote)
 						{
 							replayState.wasInputNotePressed = true;
 							playedCurrentNote = true;
+							currentGameNotesStats[noteIdx].wasPlayed = true;
 						}
 
-						if (button)
+						if ((button && i != 0) || (button && i == 0 && !_wasNumLockRevertedLastFrame))
 						{
-							auto points = GetScore((int)roundf(max(0, (max_note_score - abs(millis() - ((isLastPlayAlongNote && !isPlayAlongNote) ? lastNotePlayTime : replayState.lastNotePlayTime) - (isLastPlayAlongNote ? lastNoteDelayTime : delayTime))))));
-							if (points == 0 && isLastPlayAlongNote)
-								points = GetScore((int)roundf(max(0, (max_note_score - abs(millis() - lastNotePlayTime - lastNoteDelayTime)))));
-							printf("Adding %i points\n", points);
-							currentScore.points += points;
+							printf("pressed %s (%i)\n", keyName, noteIdx);
+							bool foundNote = false;
+							//if (noteIdx == 7)
+							//	auto x = 0;
+							for (size_t i = 0; i < notesCount; i++)
+							{
+								NoteStats& curNote = currentGameNotesStats[i];
+								auto timeDelta = abs(timeNow - curNote.playTime - curNote.delayTime);
+								if (!curNote.wasClicked && timeDelta < max_note_score && Sounds::Key2Note(curNote.key) == (Note)keypadIdx)
+								{
+									auto points = GetScore(timeDelta);
+									printf("Note %lld delay %f, points awarded: %i\n", i, timeDelta, points);
+									curNote.wasClicked = true;
+									curNote.wasPlayed = true;
+
+									currentScore.points += points;
+									foundNote = true;
+									break;
+								}
+							}
+							if (!foundNote)
+								currentScore.badNotes++;
 						}
 					}
 					else
@@ -407,7 +682,7 @@ int OnGui()
 				if (!isEnabled)
 					ImGui::PopStyleVar();
 
-				if (isPlayAlongNote)
+				if (isSoonToBePlayedAlong)
 					ImGui::PopStyleColor(3);
 
 				if ((i + 1) % 4 == 0 && i < 10)
@@ -562,7 +837,7 @@ int OnGui()
 			ImGui::Text("Do you want to clear the previeus\nrecording before starting a new one?");
 			ImGui::Separator();
 
-			auto avail = ImGui::GetContentRegionAvail().x - style.ItemSpacing.x*2;
+			auto avail = ImGui::GetContentRegionAvail().x - style.ItemSpacing.x * 2;
 
 			if (ImGui::Button("Clear", { avail / 3, 0 }))
 			{
@@ -774,7 +1049,7 @@ int OnGui()
 			}
 			ImGui::SameLine();
 			ImGui::Dummy({ 0,10 });
-			if(currentSettings.isRecording && !currentSettings.isRecordingPaused && wasNewRecEntryAdded && replayState.autoScroll)
+			if (currentSettings.isRecording && !currentSettings.isRecordingPaused && wasNewRecEntryAdded && replayState.autoScroll)
 				ImGui::SetScrollHereX(0);
 
 			wasLastTimePlaying = (replayState.isPlaying && !replayState.isPaused) || replayState.isPlayingAlong;
@@ -796,7 +1071,7 @@ int OnGui()
 		ImGui::SameLine();
 		if (ImGui::Button("Insert Note", { 0,0 }))
 		{
-			currentRecording.data.insert(currentRecording.data.begin() + ((currentRecording.selectedEvent >= 0) ? currentRecording.selectedEvent : currentRecording.data.size() - 1) + 1, { RecEv_Key , currentSettings.useScale ? currentKeySignature[0] : 0});
+			currentRecording.data.insert(currentRecording.data.begin() + ((currentRecording.selectedEvent >= 0) ? currentRecording.selectedEvent : currentRecording.data.size() - 1) + 1, { RecEv_Key , currentSettings.useScale ? currentKeySignature[0] : 0 });
 		}
 		ImGui::EndGroup();
 		ImGui::EndDisabled();

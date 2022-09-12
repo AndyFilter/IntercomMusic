@@ -119,10 +119,23 @@ struct ReplayState
 	int64_t lastNotePlayTime = -1;
 };
 
+struct NoteStats
+{
+	int64_t playTime = -1;
+	double actualWarmupRatio = 0;
+	float delayTime = 0;
+	int delayNum = 0;
+	int warmupTime;
+	Key key = (Key)-1;
+	bool wasPlayed = false;
+	bool wasClicked = false;
+};
+
 struct Score
 {
 	int badNotes = 0;
 	int combo = 0;
 	int64_t points = 0;
 	float accuracy = 0.0f;
+	int missedNotes = 0;
 };
