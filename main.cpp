@@ -51,6 +51,10 @@ const int idx2Keypad[12]{ 1, 4, 7, 11, 2, 5, 8, 0, 3, 6, 9, 10 };
 Key currentKeySignature[7];
 Note currentNoteSignature[7];
 
+int lastFrameTime = 0;
+
+int timeDilation = 1;
+
 /*
 -------- TODO --------
 
@@ -211,7 +215,7 @@ int OnGui()
 
 			if (replayState.isPlayingAlong)
 			{
-				auto timeNow = millis();
+				auto timeNow = millis() / timeDilation;
 
 				if (!wasPlayingAlongLastFrame)
 				{
@@ -394,6 +398,7 @@ int OnGui()
 					hangingDelay = 0;
 					delete[] currentGameNotesStats;
 
+					if(!replayState.waitForInput)
 					ImGui::OpenPopup("Score##ScoreEndPopup");
 				}
 
@@ -549,7 +554,7 @@ int OnGui()
 						}
 					}
 
-				auto timeNow = millis();
+				auto timeNow = millis() / timeDilation;
 
 				const char* keyName = Sounds::GetKeyName((isEnabled && currentSettings.useScale) ? currentKey : Sounds::Note2Key((Note)keypadIdx));
 				char spaceBuffer[5]{ '\0' };
@@ -561,27 +566,53 @@ int OnGui()
 
 				size_t latestNote = 0;
 
+				static long long haltIdx = -1;
+
 				if (replayState.isPlayingAlong)
 				{
 					float noteProgress = 0;
+
 					for (size_t i = 0; i < notesCount; i++)
 					{
 						NoteStats& curNote = currentGameNotesStats[i];
-						if (curNote.playTime == -1)
-							auto x = 0;
 						//auto timePlayed = curNote.playTime;//(i == 0 ? curNote.playTime : curNote.playTime > 0 ? curNote.playTime : (currentGameNotesStats[i - 1].playTime + (int64_t)currentGameNotesStats[i - 1].delayTime));
 						//auto timeDelta = abs(timeNow - curNote.playTime - curNote.delayTime);
+
+						if (Sounds::Key2Note(curNote.key) == (Note)keypadIdx && replayState.waitForInput && haltIdx > -1)
+						{
+							curNote.playTime += lastFrameTime;
+							if (haltIdx == i)
+								curNote.playTime = timeNow - (int64_t)curNote.delayTime;
+						}
+
 						auto timeLeft = timeNow - curNote.playTime - curNote.delayTime;
+
+						//if (abs(timeLeft) > 100 && haltIdx > -1)
+						//	auto x = 0;
 
 						if (abs(timeLeft) < max_note_warmup_time && Sounds::Key2Note(curNote.key) == (Note)keypadIdx && !curNote.wasClicked)
 						{
 							//auto points = GetScore(timeDelta);
 
+							//if (abs(timeLeft) < 50)
+							//	noteProgress = 1;
+							//else
+							if(noteProgress == 0)
 							noteProgress = min(max(timeLeft / max_note_warmup_time, -1), 1) + 1;
-							if(noteProgress < 1)
+							if (replayState.waitForInput && noteProgress >= 1 && haltIdx < 0)
+							{
+								noteProgress = 1;
+								haltIdx = i;
+							}
+							if (noteProgress <= 1)
 								isSoonToBePlayedAlong = true;
 
 							//printf("Note %s (%lld) time left: %f, progress: %f\n", keyName, i, timeNow - curNote.playTime - curNote.delayTime, noteProgress);
+						}
+
+						if (i == haltIdx && haltIdx > -1 && curNote.wasClicked)
+						{
+							haltIdx = -1;
 						}
 					}
 
@@ -595,6 +626,8 @@ int OnGui()
 					//ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(.2f, playAlongProgress, 0.92f));
 					//ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(.2f, playAlongProgress, 1.f));
 				}
+				else
+					haltIdx = -1;
 
 				if (!isEnabled)
 					ImGui::PushStyleVar(ImGuiStyleVar_Alpha, style.Alpha * style.DisabledAlpha);
@@ -1094,11 +1127,14 @@ int OnGui()
 		ImGui::SetNextItemWidth(controlButtonWidth - ImGui::CalcTextSize("Speed").x);
 		ImGui::SliderInt("Speed", &replayState.playbackSpeedPercent, 1, 300, "%d%%");
 
-		if (ImGui::Checkbox("Wait for input", &replayState.waitForInput))
+		ImGui::BeginDisabled(replayState.isPlayingAlong);
+		if (ImGui::Checkbox("Practice Mode", &replayState.waitForInput))
 		{
 			if (replayState.waitForInput && replayState.isPlayingAlong)
 				replayState.progress = max(replayState.progress - 2, 0);
 		}
+		ImGui::EndDisabled();
+
 		ImGui::EndDisabled();
 		ImGui::EndDisabled();
 	}
@@ -1141,7 +1177,9 @@ int main(int argc, char** argv)
 
 	while (true)
 	{
+		auto frameStart = millis();
 		GUI::DrawGui();
+		lastFrameTime = millis() - frameStart;
 	}
 
 	GUI::Destroy();
