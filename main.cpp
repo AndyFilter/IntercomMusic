@@ -632,7 +632,7 @@ int OnGui()
 				if (!isEnabled)
 					ImGui::PushStyleVar(ImGuiStyleVar_Alpha, style.Alpha * style.DisabledAlpha);
 
-				bool button = ImGui::Button(buffer, { keypadAvail.x / 3,keypadAvail.y / 4 }) || ImGui::IsKeyPressed(intecom2VKeypad[keypadIdx], false);
+				bool button = ImGui::Button(buffer, { keypadAvail.x / 3, keypadAvail.y / 4 }) || ImGui::IsKeyPressed(intecom2VKeypad[keypadIdx], false);
 
 				if (button || (replayState.isPlayingAlong && (isPlayAlongNote) && !replayState.waitForInput && playAlongProgress >= 0.9999f))
 				{
@@ -645,6 +645,9 @@ int OnGui()
 						}
 						else
 							Sounds::PlaySound((Note)keypadIdx);
+
+						if(replayState.isPlayingAlong)
+							currentGameNotesStats[noteIdx].wasPlayed = true;
 					}
 
 
@@ -1035,7 +1038,7 @@ int OnGui()
 					break;
 				case RecEv_Delay:
 					ImGui::DrawRecEvDelay(currentRecording.data[i], i, _currentRecCopy.moveMode);
-					if (ImGui::IsItemClicked(0.1f))
+					if (ImGui::IsItemClicked(0))
 						currentRecording.selectedEvent = i;
 					break;
 				default:
@@ -1081,7 +1084,7 @@ int OnGui()
 					ImGui::SameLine();
 			}
 			ImGui::SameLine();
-			ImGui::Dummy({ 0,10 });
+			ImGui::Dummy({ -8, 10 });
 			if (currentSettings.isRecording && !currentSettings.isRecordingPaused && wasNewRecEntryAdded && replayState.autoScroll)
 				ImGui::SetScrollHereX(0);
 
@@ -1159,16 +1162,27 @@ int OnGui()
 	return 0;
 }
 
+bool shouldExit = false;
+
+bool OnExit()
+{
+	shouldExit = true;
+	return true;
+}
+
 int main(int argc, char** argv)
 {
 	hwnd = GUI::Setup(OnGui);
 	GUI::VSyncFrame = (UINT*)&useVsync;
 	GUI::LoadFonts();
+	GUI::onExitFunc = OnExit;
 
 	Sounds::Setup();
 	Sounds::pBaseOctave = &currentSettings.octave;
 	Sounds::pVolume = &currentSettings.volume;
 	Sounds::pUseSawWave = &currentSettings.useSawWave;
+
+	RecalculateKeySignature(Major, Key_C);
 
 	for (int i = 0; i < 21; i++)
 	{
@@ -1177,10 +1191,14 @@ int main(int argc, char** argv)
 
 	while (true)
 	{
+		if (shouldExit)
+			break;
+
 		auto frameStart = millis();
 		GUI::DrawGui();
 		lastFrameTime = millis() - frameStart;
 	}
 
 	GUI::Destroy();
+	return 0;
 }

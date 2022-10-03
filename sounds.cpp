@@ -121,41 +121,6 @@ const char* Sounds::GetKeyName(Key key)
         case Key_A: return "A";break;
         default: return "";break;
         }
-    //if(!isFlat)
-    //    switch (idx)
-    //    {
-    //    case A: return "A"; break;
-    //    case As: return "A#"; break;
-    //    case B: return "B"; break;
-    //    case C: return "C"; break;
-    //    case Cs: return "C#"; break;
-    //    case D: return "D"; break;
-    //    case Ds: return "D#"; break;
-    //    case E: return "E"; break;
-    //    case F: return "F"; break;
-    //    case Fs: return "F#"; break;
-    //    case G: return "G"; break;
-    //    case Gs: return "G#"; break;
-    //    default: break;
-    //    }
-    //else
-    //    switch (idx)
-    //    {
-    //    case A: return "A"; break;
-    //    case D: return "D"; break;
-    //    case G: return "G"; break;
-    //    case C: return "C"; break;
-    //    case Bb: return "Bb"; break;
-    //    //case Bs: return "B#"; break;
-    //    case Cb: return "Cb"; break;
-    //    case Db: return "Db"; break;
-    //    case Eb: return "Eb"; break;
-    //    case Fb: return "Fb"; break;
-    //    case Es: return "E#"; break;
-    //    case Gb: return "Gb"; break;
-    //    case Ab: return "Ab"; break;
-    //    default:break;
-    //    }
 }
 
 Note Sounds::Key2Note(Key key)
@@ -369,12 +334,12 @@ double SawWave(double t, float frequency) {
     return value;
 };
 
-static double _currentPhase = 1;
+static float _currentPhase = 1;
 
 HRESULT CreateFunction(win32_audio_buffer* Buffer, int frequency, FunctionType funcType)
 {
     float PI2 = 6.28318f;
-    float phaseStep = ((PI2 / (double)Sounds::sampleRate) * frequency);
+    float phaseStep = ((PI2 / (float)Sounds::sampleRate) * frequency);
     float period = 1.f / frequency;
 
     for (int i = 0; i < Buffer->BytesPerBuffer; i++)
@@ -384,14 +349,14 @@ HRESULT CreateFunction(win32_audio_buffer* Buffer, int frequency, FunctionType f
         {
         case sine:
         {
-            float CurrentSample = sin(_currentPhase);//sinf(i * PI2 / Sounds::sampleRate * frequency);
+            float CurrentSample = sinf(_currentPhase);//sinf(i * PI2 / Sounds::sampleRate * frequency);
             Buffer->Memory[i] = CurrentSample;
             break;
         }
 
         case saw:  
         {
-            float CurrentSample = ((fmod((double)i / Sounds::sampleRate, period) / period) * 2 - 1.0);
+            float CurrentSample = ((fmodf((float)i / Sounds::sampleRate, period) / period) * 2 - 1.0);
             Buffer->Memory[i] = CurrentSample;
             break;
         }

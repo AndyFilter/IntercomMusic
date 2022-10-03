@@ -37,7 +37,7 @@ bool FileHelper::OpenRecording(Recording(&rec), char file_path[MAX_PATH])
 	if (!saveFile.good())
 		return false;
 
-	int size = saveFile.tellg();
+	int size = (int)saveFile.tellg();
 	saveFile.seekg(0, std::ios::beg);
 
 	BYTE* buffer = new BYTE[size];

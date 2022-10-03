@@ -111,12 +111,12 @@ void GUI::LoadFonts(float fontSizeMultiplier)
 	config.OversampleH = 2 * fontSizeMultiplier;
 	config.OversampleV = 2 * fontSizeMultiplier;
 
-	config.GlyphOffset.y = -1;
 	//io.Fonts->AddFontFromFileTTF("../Fonts\\SourceSansPro-SemiBold.ttf", defaultFontSize, &config);
 	//io.Fonts->AddFontFromFileTTF("../Fonts\\SourceSansPro-Black.ttf", defaultFontSize, &config);
+	config.GlyphOffset.y = -1;
 	io.Fonts->AddFontFromMemoryCompressedTTF(SourceSansProSemiBold_compressed_data, defaultFontSize, defaultFontSize, &config);
-	io.Fonts->AddFontFromMemoryCompressedTTF(SourceSansProBlack_compressed_data, defaultFontSize, defaultFontSize, &config);
 	config.GlyphOffset.y = 0;
+	//io.Fonts->AddFontFromMemoryCompressedTTF(SourceSansProBlack_compressed_data, defaultFontSize, defaultFontSize, &config);
 
 	io.Fonts->Build();
 }
@@ -291,11 +291,18 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_DESTROY:
 		if (onExitFunc)
+		{
 			if (onExitFunc())
 			{
 				::PostQuitMessage(0);
 				return 0;
 			}
+		}
+		else
+		{
+			::PostQuitMessage(0);
+			return 0;
+		}
 	}
 	return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
