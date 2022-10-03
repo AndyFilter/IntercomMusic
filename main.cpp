@@ -673,7 +673,7 @@ int OnGui()
 								if (!curNote.wasClicked && timeDelta < max_note_score && Sounds::Key2Note(curNote.key) == (Note)keypadIdx)
 								{
 									auto points = GetScore(timeDelta);
-									printf("Note %lld delay %f, points awarded: %i\n", i, timeDelta, points);
+									printf("Note %zu delay %f, points awarded: %i\n", i, timeDelta, points);
 									curNote.wasClicked = true;
 									curNote.wasPlayed = true;
 
@@ -1001,8 +1001,8 @@ int OnGui()
 				//bool isSelected = currentRecording.selectedEvent == i;
 				//if(ImGui::RecEvent(currentRecording.data[i], selected == i, i, {0, 0}))
 				//	selected = i;
-				char popupName[34];
-				sprintf_s(popupName, "Delete this item?##ItemDel%lld", i);
+				char popupName[36];
+				sprintf_s(popupName, "Delete this item?##ItemDel%zu", i);
 				bool is_selected = _currentRecCopy.selectedEvent == i;
 				auto item = _currentRecCopy.data[i];
 

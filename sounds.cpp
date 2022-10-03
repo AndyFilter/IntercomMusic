@@ -334,7 +334,7 @@ double SawWave(double t, float frequency) {
     return value;
 };
 
-static float _currentPhase = 1;
+double _currentPhase = 1;
 
 HRESULT CreateFunction(win32_audio_buffer* Buffer, int frequency, FunctionType funcType)
 {
@@ -349,14 +349,14 @@ HRESULT CreateFunction(win32_audio_buffer* Buffer, int frequency, FunctionType f
         {
         case sine:
         {
-            float CurrentSample = sinf(_currentPhase);//sinf(i * PI2 / Sounds::sampleRate * frequency);
+            float CurrentSample = sin(_currentPhase);//sinf(i * PI2 / Sounds::sampleRate * frequency);
             Buffer->Memory[i] = CurrentSample;
             break;
         }
 
         case saw:  
         {
-            float CurrentSample = ((fmodf((float)i / Sounds::sampleRate, period) / period) * 2 - 1.0);
+            float CurrentSample = ((fmod((float)i / Sounds::sampleRate, period) / period) * 2 - 1.0);
             Buffer->Memory[i] = CurrentSample;
             break;
         }
